@@ -19,3 +19,7 @@ uploads/
 output/
 
 .streamlit/secrets.toml
+
+# IntelliJ IDEA / PyCharm project files
+.idea/
+*.iml

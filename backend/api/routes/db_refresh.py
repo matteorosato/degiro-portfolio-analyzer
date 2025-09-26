@@ -35,6 +35,8 @@ def initial_db_load():
     try:
         app_logger.info("[DB-REFRESH] Initial DB load check started.")
         output_folder = "output"
+        # Ensure the folder exists
+        os.makedirs(output_folder, exist_ok=True)
         has_parquet = any(f.name.endswith(".parquet") for f in os.scandir(output_folder))
 
         if not has_parquet:
