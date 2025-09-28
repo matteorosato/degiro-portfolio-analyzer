@@ -68,17 +68,43 @@ def load_and_prepare_data() -> pd.DataFrame:
     try:
         df = pd.read_csv(TRANSACTION_FILE)
 
-        # Define the column names based on the old script's index-based renaming
         column_names = {
-            0: 'Date', 1: 'Time', 2: 'Product_Name_DeGiro', 3: 'ISIN', 
-            4: 'Exchange', 6: 'Quantity', 7: 'Price', 8: 'Currency', 
-            11: 'Cost', 14: 'Transaction_costs'
+            0: 'Date',
+            1: 'Time',
+            2: 'Product',
+            3: 'ISIN',
+            4: 'Reference',
+            5: 'Venue',
+            6: 'Quantity',
+            7: 'Price',
+            8: 'Price_Currency',
+            9: 'Local_Value',
+            10: 'Local_Value_Currency',
+            11: 'Value',
+            12: 'Value_Currency',
+            13: 'Exchange_Rate',
+            14: 'Transaction_Costs',
+            15: 'Transaction_Costs_Currency',
+            16: 'Total',
+            17: 'Total_Currency',
+            18: 'Order_ID'
         }
-        # Select and rename columns safely using explicit integer indices
-        column_indices = [int(i) for i in column_names.keys()]
+
+        # Apply mapping safely
+        column_indices = list(column_names.keys())
         df = df.iloc[:, column_indices]
         df.columns = list(column_names.values())
-        
+
+        # TODO remove when done. This is needed for the mapping
+        df.rename(
+            columns={
+                "Product": "Product_Name_DeGiro",
+                "Exchange_Rate": "Exchange",
+                "Total_Currency": "Currency",
+            },
+            inplace=True
+        )
+
         # First, update the ISIN mapping file based on the raw transactions
         try:
             app_logger.info("[ISIN-MAPPING] Updating ISIN mapping from transaction data...")
@@ -100,13 +126,41 @@ def load_and_prepare_data() -> pd.DataFrame:
         df['Action'] = df['Quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
         df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
         df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
-   
-        df['Quantity'] = df['Quantity'].fillna(0).astype(float)
-        df['Price'] = df['Price'].fillna(0).astype(float)
-        df['Cost'] = df['Cost'].fillna(0).astype(float)
-        df['Transaction_costs'] = df['Transaction_costs'].fillna(0).astype(float)
-        
-        df = df.dropna()
+
+        # Convert numeric columns with comma as decimal separator
+        df['Quantity'] = (
+            df['Quantity']
+            .fillna("0")
+            .astype(str)
+            .str.replace(",", ".")
+            .astype(float)
+        )
+
+        df['Price'] = (
+            df['Price']
+            .fillna("0")
+            .astype(str)
+            .str.replace(",", ".")
+            .astype(float)
+        )
+        # TODO fix this name
+        df['Cost'] = (
+            df['Value']
+            .fillna("0")
+            .astype(str)
+            .str.replace(",", ".")
+            .astype(float)
+        )
+        # TODO fix this name
+        df['Transaction_costs'] = (
+            df['Transaction_Costs']
+            .fillna("0")
+            .astype(str)
+            .str.replace(",", ".")
+            .astype(float)
+        )
+
+        # df = df.dropna()
         # Sort transactions chronologically and return
         return df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
 
