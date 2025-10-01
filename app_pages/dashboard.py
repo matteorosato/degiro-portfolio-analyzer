@@ -245,8 +245,9 @@ with st.sidebar:
 
     # Performance metrics
     performance_metrics = [col for col in df.columns if col not in ['Product', 'Ticker', 'Start Date', 'End Date']]
-    default_index_per = performance_metrics.index("Net Performance (%)")
-    selected_metric = st.selectbox("Select a Performance Metric", options=performance_metrics, index=default_index_per, key="metric_select")
+    default_index_per = performance_metrics.index("Current Value (€)")
+    selected_metric = st.selectbox("Select a Performance Metric", options=performance_metrics, index=default_index_per,
+                                   key="metric_select")
 
 # Filter on product
 product_df = df[df['Product'] == selected_product]
@@ -261,7 +262,7 @@ min_date = df['End Date'].min().to_pydatetime()
 date_selection = st.segmented_control(
     "Date Range",
     options=["1Y", "3M", "1M", "1W", "YTD", "Last year", "Last month", "All time"],
-    default="1Y",
+    default="All time",
     selection_mode="single",
 )
 
@@ -302,151 +303,91 @@ selected_end_date = max_date - timedelta(days=date_mapping[date_selection][1])
 # Filter data by date range
 filtered_df = product_df[(product_df['End Date'] >= selected_start_date) & (product_df['End Date'] <= selected_end_date)].sort_values(by='End Date')
 
-st.subheader(f"{selected_product}")
+# st.subheader(f"{selected_product}")
 
-# Top level metrics
-if not filtered_df.empty:
-
-    # Top current value
-    top_current_value_start = filtered_df.iloc[-2].get('Current Value (€)', 0) if len(filtered_df) > 1 else 0
-    top_current_value_end = filtered_df.iloc[-1].get('Current Value (€)', 0)
-    top_current_value_delta = round((top_current_value_end-top_current_value_start), 2)
-
-    if top_current_value_start != 0:
-        top_current_value_delta_eur = f"+€ {abs(top_current_value_delta)}" if top_current_value_delta > 0 else f"-€ {abs(top_current_value_delta)}"
-        top_current_value_delta_per = round(((top_current_value_end-top_current_value_start)/abs(top_current_value_start))*100, 2)
-    else:
-        top_current_value_delta_eur = 0
-        top_current_value_delta_per = 0
-
-    # Top current return
-    top_current_return_start = filtered_df.iloc[-2].get('Current Money Weighted Return (€)', 0) if len(filtered_df) > 1 else 0
-    top_current_return_end = filtered_df.iloc[-1].get('Current Money Weighted Return (€)', 0)
-    top_current_return_delta = round((top_current_return_end-top_current_return_start), 2)
-
-    if top_current_return_start != 0:
-        top_current_return_delta_eur = f"+€ {abs(top_current_return_delta)}" if top_current_return_delta > 0 else f"-€ {abs(top_current_return_delta)}"
-        top_current_return_delta_per = round(((top_current_return_end-top_current_return_start)/abs(top_current_return_start))*100, 2)
-    else:
-        top_current_return_delta_eur = 0
-        top_current_return_delta_per = 0
-
-    # Top net return
-    top_net_return_start = filtered_df.iloc[-2].get('Net Return (€)', 0) if len(filtered_df) > 1 else 0
-    top_net_return_end = filtered_df.iloc[-1].get('Net Return (€)', 0)
-    top_net_return_delta = round((top_net_return_end-top_net_return_start), 2)
-
-    if top_net_return_start != 0:
-        top_net_return_delta_eur = f"+€ {abs(top_net_return_delta)}" if top_net_return_delta > 0 else f"-€ {abs(top_net_return_delta)}"
-        top_net_return_delta_per = round(((top_net_return_end-top_net_return_start)/abs(top_net_return_start))*100, 2)
-    else:
-        top_net_return_delta_eur = 0
-        top_net_return_delta_per = 0
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="Current Value on Last Day", value=f"€ {top_current_value_end}", delta=f"{top_current_value_delta_per} % | {top_current_value_delta_eur}", border=True)
-    with col2:
-        st.metric(label="Current Return on Last Day", value=f"€ {top_current_return_end}", delta=f"{top_current_return_delta_per} % | {top_current_return_delta_eur}", border=True)
-    with col3:
-        st.metric(label="Net Return on Last Day", value=f"€ {top_net_return_end}", delta=f"{top_net_return_delta_per} % | {top_net_return_delta_eur}", border=True)
-    
-    st.divider()
-
-# Plot performance over time
+# ---- Chart Section ----
 if not filtered_df.empty:
     st.subheader(f"{selected_metric} for {selected_product}")
-
-    # Top metric (selected)
-    top_selected_metric_start = filtered_df.iloc[-2].get(selected_metric, 0) if len(filtered_df) > 1 else 0
-    top_selected_metric_end = filtered_df.iloc[-1].get(selected_metric, 0)
-    top_selected_metric_delta = round((top_selected_metric_end-top_selected_metric_start), 2)
-
-    if top_selected_metric_start != 0:
-        top_selected_metric_delta_eur = f"+€ {abs(top_selected_metric_delta)}" if top_selected_metric_delta > 0 else f"-€ {abs(top_selected_metric_delta)}"
-        top_selected_metric_delta_per = round(((top_selected_metric_end-top_selected_metric_start)/abs(top_selected_metric_start))*100, 2)
-    else:
-        top_selected_metric_delta_eur = 0
-        top_selected_metric_delta_per = 0
-
-    # Top net return YTD
-
-    # Get last year rows (for returns/cost at the very end of last year)
-    last_year_rows = product_df[product_df['End Date'].dt.year == (datetime.now().year-1)].sort_values(by='End Date')
-
-    top_net_return_ytd_start = (
-        last_year_rows.iloc[-1].get('Net Return (€)', 0) if not last_year_rows.empty
-        else 0
-    )
-
-    top_total_cost_ytd_start = (
-        last_year_rows.iloc[-1].get('Total Cost (€)', 0) if not last_year_rows.empty
-        else 0
-    )
-    
-    if top_total_cost_ytd_start != 0:
-        top_net_return_ytd_delta = round((top_net_return_end-top_net_return_ytd_start), 2)
-        top_net_return_ytd_delta_eur = f"+€ {abs(top_net_return_ytd_delta)}" if top_net_return_ytd_delta> 0 else f"-€ {abs(top_net_return_ytd_delta)}"
-        top_net_return_ytd_delta_per = round(((top_net_return_end-top_net_return_ytd_start)/abs(top_total_cost_ytd_start))*100, 2)
-    else:
-        top_net_return_ytd_delta_eur = 0
-        top_net_return_ytd_delta_per = 0
-
-    # Adjust displayed string based on metric type
-    if '€' in selected_metric:
-        selected_metric_value = f'€ {top_selected_metric_end}'
-        selected_metric_delta = f'{top_selected_metric_delta_per} % | {top_selected_metric_delta_eur}'
-    elif '%' in selected_metric:
-        selected_metric_value = f'{top_selected_metric_end} %'
-        selected_metric_delta = f'{top_selected_metric_delta} %p'
-    else:
-        selected_metric_value = top_selected_metric_end
-        selected_metric_delta = f'{top_selected_metric_delta}'
-
-    # Display top metric (selected)
-    if ('Net' in selected_metric) and (str(datetime.now().year) in str(selected_end_date)):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label=selected_metric, value=selected_metric_value, delta=selected_metric_delta, border=False, width="content")
-        with col2:
-            if top_total_cost_ytd_start == 0:
-                pass
-            elif selected_metric == 'Net Performance (%)':
-                st.metric(label="YTD - Net Performance (%)", value=f"{top_net_return_ytd_delta_per} %", delta=f"{top_net_return_ytd_delta_eur}", border=False, width="content")
-            else:
-                st.metric(label="YTD - Net Return (€)", value=f" {top_net_return_ytd_delta_eur}", delta=f"{top_net_return_ytd_delta_per} %", border=False, width="content")
-        with col3:
-            pass
-    else:
-        st.metric(label=selected_metric, value=selected_metric_value, delta=selected_metric_delta, border=False, width="content")
 
     # Plot
     fig = px.line()
 
-    # Add the first trace (main product) using add_scatter
-    fig.add_scatter(x=filtered_df['End Date'], 
-                        y=filtered_df[selected_metric], 
-                        mode='lines', 
-                        name=f"{selected_product}", 
-                        line=dict(color="#1f77b4", shape='spline', smoothing=0.7))
-    
-    fig.update_layout(width=1200, height=400, margin=dict(l=0, r=0, t=50, b=50),)
+    # Add the first trace (main product)
+    fig.add_scatter(
+        x=filtered_df['End Date'],
+        y=filtered_df[selected_metric],
+        mode='lines',
+        name=f"{selected_product}",
+        line=dict(color="#1f77b4", shape='spline', smoothing=0.7)
+    )
 
     # Add comparison line if another product is selected
     if not compare_product_df.empty:
-        compare_filtered_df = compare_product_df[(compare_product_df['End Date'] >= selected_start_date) & (compare_product_df['End Date'] <= selected_end_date)].sort_values(by='End Date')
-        fig.add_scatter(x=compare_filtered_df['End Date'], 
-                        y=compare_filtered_df[selected_metric], 
-                        mode='lines', 
-                        name=f"{selected_compare_product}", 
-                        line=dict(color='orange', shape='spline', smoothing=0.7))
+        compare_filtered_df = compare_product_df[
+            (compare_product_df['End Date'] >= selected_start_date) &
+            (compare_product_df['End Date'] <= selected_end_date)
+        ].sort_values(by='End Date')
 
-        # Set legend visible if two lines are plotted
-        fig.update_layout(showlegend=True, legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center", yanchor="bottom"))
+        fig.add_scatter(
+            x=compare_filtered_df['End Date'],
+            y=compare_filtered_df[selected_metric],
+            mode='lines',
+            name=f"{selected_compare_product}",
+            line=dict(color='orange', shape='spline', smoothing=0.7)
+        )
 
+        fig.update_layout(
+            showlegend=True,
+            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center", yanchor="bottom")
+        )
+
+    fig.update_layout(width=1200, height=400, margin=dict(l=0, r=0, t=50, b=50))
     st.plotly_chart(fig, use_container_width=False)
+
+    # ---- Portfolio Summary Section ----
+    st.subheader("Portfolio Summary")
+
+    current_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
+    current_return = filtered_df.iloc[-1].get("Current Money Weighted Return (€)", 0)
+    total_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
+    current_return_pct = (current_return / total_cost * 100) if total_cost != 0 else 0
+
+    # Total Return (no + sign, negative values will automatically show "-")
+    total_return_display = f"€ {current_return:,.2f}"
+
+    # Annualized return calculation
+    start_date = filtered_df['Start Date'].min()
+    end_date = filtered_df['End Date'].max()
+    days_held = (end_date - start_date).days
+    annualized_return_pct = (
+        ((current_value / total_cost) ** (365 / days_held) - 1) * 100
+        if total_cost > 0 and days_held > 0 else 0
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            label="Current Portfolio Value",
+            value=f"€ {current_value:,.2f}",
+        )
+    with col2:
+        st.metric(
+            label="Total Return",
+            value=total_return_display,
+            delta=f"{current_return_pct:.2f} %"
+        )
+    with col3:
+        st.metric(
+            label="Annualized Return (CAGR)",
+            value=f"{annualized_return_pct:.2f} %"
+        )
+
+    st.divider()
 else:
     st.write("No data available for the selected product and date range.")
+
+# ---- Additional Metrics Section ----
+st.subheader("Additional Portfolio Metrics")
 
 with st.expander("Data", expanded=False):
     st.write(filtered_df.drop(columns=['Start Date']))
