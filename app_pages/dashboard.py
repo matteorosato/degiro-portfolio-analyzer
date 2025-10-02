@@ -84,11 +84,11 @@ csv_files = [f for f in os.listdir("uploads") if f.endswith(".csv")]
 if not csv_files:
     st.warning("No DeGiro transaction data found. Please upload a CSV file to proceed. Check GitHub project documention for instructions.")
     st.markdown(
-        "📖 [Check the GitHub project documentation for instructions](https://github.com/kbberendsen/portfolio-analyzer)"
+        "📖 [Check the GitHub project documentation for instructions](https://github.com/matteorosato/degiro-portfolio-analyzer)"
     )
 
     uploaded_file = st.file_uploader("Upload your DeGiro transactions CSV file", type=["csv"])
-    
+
     if uploaded_file:
         os.makedirs("uploads", exist_ok=True)  # Ensure the uploads folder exists
         file_path = os.path.join('uploads', 'Transactions.csv')
@@ -96,7 +96,7 @@ if not csv_files:
         df = pd.read_csv(uploaded_file)
         df.to_csv(file_path, index=False)
         st.success("File uploaded successfully! Please reload the page.")
-    
+
     st.stop()  # Stop execution if no data is available
 
 # Placeholder for the loading spinner while refreshing data on startup
@@ -106,14 +106,14 @@ loading_placeholder = st.empty()
 if "startup_refresh" not in st.session_state:
     st.session_state.startup_refresh = False  # Indicates refresh hasn't run yet
 
-def check_columns(uploaded_df):    
+def check_columns(uploaded_df):
     try:
         st.write(uploaded_df.head())  # Display the first few rows of the uploaded file
 
         if uploaded_df.empty:
             st.error("Uploaded file is empty.")
             return False
-        
+
     except Exception as e:
         st.error(f"Error reading the uploaded file: {e}")
         return False
@@ -134,7 +134,7 @@ def refresh_data(uploaded_file=None):
         file_path = os.path.join('uploads', 'Transactions.csv')
         new_data.to_csv(file_path, index=False)
         st.success(f"Data saved to {file_path}")
-    
+
     # Trigger the backend API to refresh data
     try:
         # Check if initial db load is needed
@@ -142,10 +142,10 @@ def refresh_data(uploaded_file=None):
         trigger_portfolio_calculation()
         if st.session_state.startup_refresh:
             st.success(f"Data updated successfully! (Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
-        
+
     except Exception as e:
         st.error(f"Error occurred while refreshing data: {e}")
-        
+
 def clear_cache():
     cache_path_monthly = os.path.join('output', 'portfolio_performance_monthly.parquet')
     cache_path_daily = os.path.join('output', 'portfolio_performance_daily.parquet')
@@ -197,29 +197,43 @@ rename_dict = {
     'net_performance_percentage': 'Net Performance (%)'
 }
 
-try:
-    # Load daily data
-    df = pd.read_parquet(os.path.join('output', 'portfolio_performance_daily.parquet'))
 
-    # If df is empty
-    if df.empty:
-        if st.button('Force refresh', type="primary"):
-            trigger_portfolio_calculation()
+file_path = os.path.join('output', 'portfolio_performance_daily.parquet')
+
+# Check if the file exists before trying to load it
+if os.path.exists(file_path):
+    try:
+        # Load daily data
+        df = pd.read_parquet(file_path)
+
+        # If df is empty
+        if df.empty:
+            if st.button('Force refresh', type="primary"):
+                trigger_portfolio_calculation()
+                st.session_state.startup_refresh = False
+                st.rerun()
+
+    except Exception as e:
+        # General exception handling
+        st.warning(f"Failed loading data. Are the stock tickers mapped correctly? Error details: {str(e)}")
+        st.page_link("app_pages/ticker_mapping.py", label="Click here to check ticker mapping", icon="ℹ️")
+        st.markdown(
+            "📖 [Check the GitHub project documentation for instructions](https://github.com/matteorosato/degiro-portfolio-analyzer/blob/main/README.md)"
+        )
+        if st.button('Clear Cached Data', type="primary"):
+            clear_cache()
             st.session_state.startup_refresh = False
             st.rerun()
+        st.stop()
 
-except:
-    st.warning(f"Failed loading data. Are the stock tickers mapped correctly? Check GitHub project documention for instructions.")
-    st.page_link("app_pages/ticker_mapping.py", label="Click here to check ticker mapping", icon="ℹ️")
-    st.markdown(
-        "📖 [Check the GitHub project documentation for instructions](https://github.com/kbberendsen/portfolio-analyzer)"
-    )
-    if st.button('Clear Cached Data', type="primary"):
-        clear_cache()
-        st.session_state.startup_refresh = False
-        st.rerun()
-    st.stop()
+else:
+    # Handle case where the file doesn't exist
+    st.warning("The portfolio data file is missing. Creating it for the first time...")
+    trigger_portfolio_calculation()  # This will create the missing file
+    # st.session_state.startup_refresh = False
+    # st.rerun()  # Reload the page to read the new file
 
+df = pd.read_parquet(file_path)
 # Rename columns
 df = df.rename(columns=rename_dict)
 
