@@ -99,7 +99,7 @@ def load_and_prepare_data() -> pd.DataFrame:
         df.rename(
             columns={
                 "Product": "Product_Name_DeGiro",
-                "Exchange_Rate": "Exchange",
+                "Reference": "Exchange",
                 "Total_Currency": "Currency",
             },
             inplace=True

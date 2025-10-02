@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="Ticker Mapping", page_icon="📊", layout="wide")
 st.title("Ticker Mapping")
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") # Use environment variable for API URL
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000") # Use environment variable for API URL
 
 # Call transactions processing (API)
 try:
