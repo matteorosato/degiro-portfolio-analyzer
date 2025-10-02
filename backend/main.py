@@ -1,16 +1,22 @@
 import os
+import sys
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from backend.api.routes import portfolio, transactions, db_refresh, logs, debug
-from backend.utils.scheduler import start_scheduled_tasks
-from backend.utils.logger import app_logger
 
+from backend.api.routes import portfolio, transactions, db_refresh, logs, debug
+from backend.utils.logger import app_logger
+from backend.utils.scheduler import start_scheduled_tasks
+
+# Add the project root directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Load .env only in development mode
 DEV_MODE = os.getenv("DEV_MODE", "False").lower() in ("true", "1", "yes")
 if DEV_MODE:
     from dotenv import load_dotenv
+
     load_dotenv(dotenv_path=".env")  # Safe even if the file is missing
     app_logger.info("[STARTUP] .env file loaded in DEV_MODE (api)")
 
@@ -49,7 +55,7 @@ async def read_root():
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
+        host="localhost",
         port=8000,
         reload=True,
     )

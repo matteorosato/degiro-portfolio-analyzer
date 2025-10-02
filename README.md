@@ -4,6 +4,108 @@ Streamlit dashboard displaying analytics of a DeGiro stock portfolio.
 
 # Installation
 
+## Setting Up the Application Locally
+
+To run the application on your local machine, follow these steps:
+
+### 1. Verify Python and pip are installed
+
+Ensure that Python 3.10+ and pip are installed. You can check the versions by running the following commands:
+
+```bash
+python3 --version
+pip --version
+```
+
+If they are not installed, you can download Python from the official site: [Download Python](https://www.python.org/downloads/).
+
+### 2. Clone the repository to your local machine
+
+Clone the repository using the following command:
+
+```bash
+git clone https://github.com/matteorosato/degiro-portfolio-analyzer.git
+```
+
+### 3. Navigate into the project directory
+
+Go into the project directory:
+
+```bash
+cd degiro-portfolio-analyzer
+```
+
+### 4. Create a virtual environment for the project
+
+To set up a virtual environment, follow the steps for your operating system:
+- On Windows:
+  ```bash
+  py -m venv .venv
+  ```
+- On macOS and Linux:
+  ```bash
+  python3 -m venv .venv
+  ```
+
+### 5. Activate the virtual environment
+
+Activate the virtual environment using the appropriate command for your system:
+- On Windows:
+  ```bash
+  .venv\Scripts\activate
+  ```
+- On macOS and Linux:
+  ```bash
+  source .venv/bin/activate
+  ```
+
+### 6. Install the required dependencies
+
+Install the project dependencies by running the following command:
+- On Windows:
+  ```bash
+  py -m pip install -r requirements.txt
+  ```
+- On macOS and Linux:
+  ```bash
+  python3 -m pip install -r requirements.txt
+  ```
+
+### 7. Configure the `.env` file
+
+Populate the `.env` file with the necessary environment variables. You can refer to the `.env.example` file as a guide.
+
+### 8. Set up the `config.toml` file
+
+Edit the `config.toml` file with your personal settings and preferences.
+
+### 9. Run the application
+
+To run the application, follow these steps:
+
+1. **Navigate to the `backend` directory**:  
+   First, change your working directory to the `backend` folder:
+   ```bash
+   cd backend
+   ```
+
+2. **Start the Flask backend**:  
+   Run the Flask application by executing the following command:
+   ```bash
+   python main.py
+   ```
+
+3. **Run the Streamlit frontend**:  
+   Open a new terminal window (or tab), navigate back to the project root folder, and run the Streamlit app:
+   ```bash
+   streamlit run app.py
+   ```
+
+   This will launch the Streamlit app, which will communicate with the Flask backend to display the user interface.
+
+   If you're using **PyCharm**, you can follow the instructions in this [guide](https://discuss.streamlit.io/t/run-streamlit-from-pycharm/21624) to run Streamlit directly from the IDE.
+
+After completing these steps, the application should be running locally, and you can begin interacting with it.
 ## Docker
 Before you start, make sure Docker is installed on your machine/server. See the [official Docker installation guide](https://docs.docker.com/engine/install/) based on your OS.
 
