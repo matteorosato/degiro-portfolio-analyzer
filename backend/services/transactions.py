@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import json
 import warnings
-import traceback
+import yfinance as yf
 from backend.utils.logger import app_logger
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
@@ -10,6 +10,27 @@ warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning
 # File Paths
 TRANSACTION_FILE = 'uploads/Transactions.csv'
 MAPPING_FILE = 'output/isin_mapping.json'
+
+
+def get_yahoo_product(isin: str, exchange: str = "") -> dict:
+    results_by_isin = yf.Search(isin, max_results=1)
+
+    if not results_by_isin.quotes:
+        return {}
+
+    product_long_name = results_by_isin.quotes[0]['longname']
+    results_by_product_name = yf.Search(product_long_name, max_results=10)
+
+    # If an exchange is provided, attempt to find the product from matching exchanges
+    if exchange:
+        for quote in results_by_product_name.quotes:
+            if quote.get('exchange') == exchange:
+                return quote
+
+    # If no exchange match is found, or no exchange is provided, return the first product in the list
+    return results_by_product_name.quotes[0]
+
+
 
 def update_isin_mapping_json(df: pd.DataFrame):
     """
@@ -19,7 +40,7 @@ def update_isin_mapping_json(df: pd.DataFrame):
     required_cols = {'ISIN', 'Product_Name_DeGiro', 'Exchange'}
     if not required_cols.issubset(df.columns):
         app_logger.warning("[ISIN-MAPPING] Columns required for ISIN mapping are missing. Skipping update.")
-        return
+        return None
 
     # Load existing mapping or initialize an empty one
     existing_mapping = {}
@@ -31,16 +52,29 @@ def update_isin_mapping_json(df: pd.DataFrame):
     isin_list = df[['ISIN', 'Product_Name_DeGiro', 'Exchange']].drop_duplicates()
     isin_list = isin_list[isin_list['ISIN'].notna() & (isin_list['ISIN'].astype(str).str.strip() != "")]
 
+    # Exchange mapping from Degiro to Yahoo Finance
+    exchange_mapping = {
+        "EAM": "AMS",
+        "XET": "GER",
+        "MIL": "MIL",
+        "LSE": "LSE",
+        "NDQ": "NYQ",
+        # "TDG": "XET",
+        # "NSY": "SWX",
+        # "EPA": "PAR",
+    }
+
     # Add new ISINs to the mapping without overwriting existing entries
     for isin, name, exchange in isin_list.values:
+        product = get_yahoo_product(isin=isin, exchange=exchange_mapping.get(exchange))
         if isin not in existing_mapping:
             app_logger.info(f"[ISIN-MAPPING] Adding new ISIN mapping: {isin} -> {name}")
             existing_mapping[isin] = {
-                "ticker": "",
+                "ticker": product.get("symbol", ""),
                 "degiro_name": name,
-                "display_name": name,
+                "display_name": product.get("shortname", name),
                 "exchange": exchange,
-                "product_type": "",
+                "product_type": product.get("quoteType", "")
             }
     
     # Ensure the special "FULL_PORTFOLIO" entry exists
@@ -175,7 +209,6 @@ def get_transactions() -> pd.DataFrame:
     """
     try:
         app_logger.info("[TRANSACTIONS] Processing transactions...")
-        
         transactions_df = load_and_prepare_data()
         app_logger.info("[TRANSACTIONS] Transactions processed successfully.")
 
