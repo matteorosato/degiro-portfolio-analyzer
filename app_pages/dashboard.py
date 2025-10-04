@@ -8,6 +8,10 @@ import streamlit as st
 
 from backend.utils.api import post_api_request
 
+OUTPUT_DIR = "output"
+LOG_DIR = "logs"
+UPLOADS_DIR = "uploads"
+
 # Config
 st.set_page_config(page_title="Degiro Portfolio Analyzer", page_icon=":bar_chart:", layout="centered")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")  # Use environment variable for API URL
@@ -24,8 +28,8 @@ def is_backend_alive():
 
 def cached_files_exist():
     cached_files = [
-        os.path.join('output', 'portfolio_performance_daily.parquet'),
-        os.path.join('output', 'stock_prices.parquet')
+        os.path.join(OUTPUT_DIR, 'portfolio_performance_daily.parquet'),
+        os.path.join(OUTPUT_DIR, 'stock_prices.parquet')
     ]
     return all(os.path.exists(f) for f in cached_files)
 
@@ -52,8 +56,6 @@ def initial_db_load():
 
 
 ############ APP ############
-
-LOG_DIR = "logs"
 
 
 def get_log_files():
@@ -87,11 +89,10 @@ if not is_backend_alive():
 st.title("Degiro Portfolio Analyzer")
 
 # Ensure the uploads directory exists
-uploads_dir = "uploads"
-os.makedirs(uploads_dir, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # List CSV files in the uploads directory
-csv_files = [f for f in os.listdir(uploads_dir) if f.lower().endswith(".csv")]
+csv_files = [f for f in os.listdir(UPLOADS_DIR) if f.lower().endswith(".csv")]
 
 # Check if any transaction CSV files are present
 if not csv_files:
@@ -104,13 +105,16 @@ if not csv_files:
     uploaded_file = st.file_uploader("Upload your DeGiro transactions CSV file", type=["csv"])
 
     if uploaded_file:
-        os.makedirs("uploads", exist_ok=True)  # Ensure the uploads folder exists
-        file_path = os.path.join('uploads', 'Transactions.csv')
-
+        # Save the uploaded file to the desired location
+        file_path = os.path.join(UPLOADS_DIR, 'Transactions.csv')
         df = pd.read_csv(uploaded_file)
         df.to_csv(file_path, index=False)
-        st.success("File uploaded successfully! Please reload the page.")
-        # TODO can we add rerun here?
+
+        # Inform the user that the page will be reloaded
+        st.success("File uploaded successfully! The page will reload to apply the changes.")
+
+        # Trigger the page reload (rerun the app)
+        st.rerun()
 
     st.stop()  # Stop execution if no data is available
 
@@ -118,8 +122,8 @@ if not csv_files:
 loading_placeholder = st.empty()
 
 # Define startup refresh state variable
-if "startup_refresh" not in st.session_state:
-    st.session_state.startup_refresh = False  # Indicates refresh hasn't run yet
+if st.session_state.get("startup_refresh") is None:
+    st.session_state.startup_refresh = False  # Indicates refresh hasn't been run yet
 
 
 def refresh_data(uploaded_file=None):
@@ -129,9 +133,9 @@ def refresh_data(uploaded_file=None):
         if df.empty:
             st.error("The uploaded file is empty after reading.")
             return
-        file_path = os.path.join('uploads', 'Transactions.csv')
-        df.to_csv(file_path, index=False)
-        st.success(f"Data saved to {file_path}")
+        transaction_file = os.path.join(UPLOADS_DIR, 'Transactions.csv')
+        df.to_csv(transaction_file, index=False)
+        st.success(f"Data saved to {transaction_file}")
 
     # Trigger the backend API to refresh data
     try:
@@ -147,21 +151,31 @@ def refresh_data(uploaded_file=None):
 
 def clear_cache():
     cached_files = [
-        os.path.join('output', 'portfolio_performance_monthly.parquet'),
-        os.path.join('output', 'portfolio_performance_daily.parquet'),
-        os.path.join('output', 'stock_prices.parquet')
+        os.path.join(OUTPUT_DIR, filename)
+        for filename in [
+            'portfolio_performance_monthly.parquet',
+            'portfolio_performance_daily.parquet',
+            'stock_prices.parquet'
+        ]
     ]
+
+    if not cached_files:
+        st.warning("No cached files found to clear.")
+        return
 
     deleted_files = []
     for file_path in cached_files:
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-            deleted_files.append(file_path)
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+                basename = os.path.basename(file_path)
+                deleted_files.append(basename)
+                st.info(f"Deleted {basename}")
+            else:
+                st.warning(f"File not found: {file_path}")
+        except Exception as e:
+            st.error(f"Error deleting {file_path}: {e}")
 
-    if deleted_files:
-        st.toast(f"Cleared cached data: {', '.join(deleted_files)}.")
-    else:
-        st.warning("No cached files found to clear.")
 
 # Startup refresh logic
 if not st.session_state.startup_refresh:
@@ -169,16 +183,21 @@ if not st.session_state.startup_refresh:
     if cached_files_exist():
         try:
             response = requests.post(f"{API_BASE_URL}/portfolio/refresh")
-        except Exception as e:
-            st.toast(f"Error starting background refresh: {e}")
-
-        st.session_state.startup_refresh = True
-
+            response.raise_for_status()  # Catching eventual errors
+            st.toast("Data refreshed successfully.")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error during data refreshing process: {e}")
     else:
         # No cached files -> Run blocking calculation synchronously
         with st.spinner("No cached data found. Running initial portfolio calculation..."):
-            refresh_data()
-            st.session_state.startup_refresh = True
+            try:
+                refresh_data()
+                st.toast("Initial portfolio calculation completed successfully.")
+            except Exception as e:
+                st.error(f"Error during portfolio calculation: {e}")
+
+    # Ensure startup refresh flag is set to True after either process
+    st.session_state.startup_refresh = True
 
 # Clear the placeholder once the data is ready
 loading_placeholder.empty()
@@ -201,13 +220,13 @@ rename_dict = {
     'net_performance_percentage': 'Net Performance (%)'
 }
 
-file_path = os.path.join('output', 'portfolio_performance_daily.parquet')
+portfolio_performance_file = os.path.join(OUTPUT_DIR, 'portfolio_performance_daily.parquet')
 
 # Check if the file exists before trying to load it
-if os.path.exists(file_path):
+if os.path.exists(portfolio_performance_file):
     try:
         # Load daily data
-        df = pd.read_parquet(file_path)
+        df = pd.read_parquet(portfolio_performance_file)
 
         # If df is empty
         if df.empty:
@@ -236,7 +255,7 @@ else:
     # st.session_state.startup_refresh = False
     # st.rerun()  # Reload the page to read the new file
 
-df = pd.read_parquet(file_path)
+df = pd.read_parquet(portfolio_performance_file)
 # Rename columns
 df = df.rename(columns=rename_dict)
 
