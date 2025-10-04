@@ -1,28 +1,34 @@
-import streamlit as st
-import pandas as pd
-from datetime import datetime, timedelta
-import plotly.express as px
 import os
+from datetime import datetime, timedelta
+
+import pandas as pd
+import plotly.express as px
 import requests
+import streamlit as st
+
 from backend.utils.api import post_api_request
 
 # Config
-st.set_page_config(page_title="Stock Portfolio Dashboard", page_icon=":bar_chart:", layout="centered")
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") # Use environment variable for API URL
+st.set_page_config(page_title="Degiro Portfolio Analyzer", page_icon=":bar_chart:", layout="centered")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")  # Use environment variable for API URL
+
 
 def is_backend_alive():
     try:
         response = requests.get(API_BASE_URL, timeout=2)
-        return response.status_code == 200
-    except requests.exceptions.RequestException:
+        response.raise_for_status()
+        return True
+    except requests.RequestException:
         return False
-    
+
+
 def cached_files_exist():
     cached_files = [
         os.path.join('output', 'portfolio_performance_daily.parquet'),
         os.path.join('output', 'stock_prices.parquet')
     ]
     return all(os.path.exists(f) for f in cached_files)
+
 
 # Backend triggers
 def trigger_portfolio_calculation():
@@ -31,37 +37,44 @@ def trigger_portfolio_calculation():
         f"{API_BASE_URL}/portfolio/calculate"
     )
 
+
 def trigger_db_refresh():
     return post_api_request(
         f"{API_BASE_URL}/db/refresh",
         success_message="Database refresh triggered successfully."
     )
 
+
 def initial_db_load():
     return post_api_request(
         f"{API_BASE_URL}/db/initial-db-load"
     )
 
+
 ############ APP ############
 
 LOG_DIR = "logs"
+
 
 def get_log_files():
     if not os.path.exists(LOG_DIR):
         return []
     return [f for f in os.listdir(LOG_DIR) if os.path.isfile(os.path.join(LOG_DIR, f))]
 
+
 def read_last_n_lines_reversed(filename, n=100):
     with open(os.path.join(LOG_DIR, filename), 'r', encoding='utf-8') as f:
         lines = f.readlines()
     return "".join(lines[-n:][::-1])
+
 
 with st.sidebar.expander("View Logs", expanded=False):
     log_files = get_log_files()
     if not log_files:
         st.info("No log files found.")
     else:
-        selected_log = st.selectbox("Select log file", options=[""] + log_files, format_func=lambda x: x or "— Select a file —")
+        selected_log = st.selectbox("Select log file", options=[""] + log_files,
+                                    format_func=lambda x: x or "— Select a file —")
         if selected_log:
             content = read_last_n_lines_reversed(selected_log, 100)
             st.text_area(f"Contents of {selected_log} (most recent first)", content, height=300)
@@ -71,18 +84,19 @@ if not is_backend_alive():
     st.error("Backend API is not reachable. Please ensure the backend is running.")
     st.stop()  # Stop execution if backend is not reachable
 
-st.title("Stock Portfolio Dashboard")
+st.title("Degiro Portfolio Analyzer")
 
-# Transactions file path
-# Create uploads directory if it doesn't exist
-os.makedirs("uploads", exist_ok=True)
+# Ensure the uploads directory exists
+uploads_dir = "uploads"
+os.makedirs(uploads_dir, exist_ok=True)
 
-# Check if the uploads folder contains any CSV files
-csv_files = [f for f in os.listdir("uploads") if f.endswith(".csv")]
+# List CSV files in the uploads directory
+csv_files = [f for f in os.listdir(uploads_dir) if f.lower().endswith(".csv")]
 
-# Check for transaction file in the uploads folder
+# Check if any transaction CSV files are present
 if not csv_files:
-    st.warning("No DeGiro transaction data found. Please upload a CSV file to proceed. Check GitHub project documention for instructions.")
+    st.warning("No Degiro transaction data found. Please upload a CSV file to proceed."
+               " Check GitHub project documentation for instructions.")
     st.markdown(
         "📖 [Check the GitHub project documentation for instructions](https://github.com/matteorosato/degiro-portfolio-analyzer)"
     )
@@ -96,6 +110,7 @@ if not csv_files:
         df = pd.read_csv(uploaded_file)
         df.to_csv(file_path, index=False)
         st.success("File uploaded successfully! Please reload the page.")
+        # TODO can we add rerun here?
 
     st.stop()  # Stop execution if no data is available
 
@@ -106,33 +121,16 @@ loading_placeholder = st.empty()
 if "startup_refresh" not in st.session_state:
     st.session_state.startup_refresh = False  # Indicates refresh hasn't run yet
 
-def check_columns(uploaded_df):
-    try:
-        st.write(uploaded_df.head())  # Display the first few rows of the uploaded file
-
-        if uploaded_df.empty:
-            st.error("Uploaded file is empty.")
-            return False
-
-    except Exception as e:
-        st.error(f"Error reading the uploaded file: {e}")
-        return False
 
 def refresh_data(uploaded_file=None):
     # Check for new transactions file
     if uploaded_file is not None:
-        uploaded_df = pd.read_csv(uploaded_file)
-
-        # Read the uploaded file into a DataFrame
-        new_data = uploaded_df
-
-        if new_data.empty:
+        df = pd.read_csv(uploaded_file)
+        if df.empty:
             st.error("The uploaded file is empty after reading.")
             return
-
-        # Save the new data to file
         file_path = os.path.join('uploads', 'Transactions.csv')
-        new_data.to_csv(file_path, index=False)
+        df.to_csv(file_path, index=False)
         st.success(f"Data saved to {file_path}")
 
     # Trigger the backend API to refresh data
@@ -146,18 +144,24 @@ def refresh_data(uploaded_file=None):
     except Exception as e:
         st.error(f"Error occurred while refreshing data: {e}")
 
-def clear_cache():
-    cache_path_monthly = os.path.join('output', 'portfolio_performance_monthly.parquet')
-    cache_path_daily = os.path.join('output', 'portfolio_performance_daily.parquet')
-    cache_path_stock_prices = os.path.join('output', 'stock_prices.parquet')
-    cached_files = [cache_path_monthly, cache_path_daily, cache_path_stock_prices]
 
+def clear_cache():
+    cached_files = [
+        os.path.join('output', 'portfolio_performance_monthly.parquet'),
+        os.path.join('output', 'portfolio_performance_daily.parquet'),
+        os.path.join('output', 'stock_prices.parquet')
+    ]
+
+    deleted_files = []
     for file_path in cached_files:
         if os.path.isfile(file_path):
             os.remove(file_path)
-            print(f"{file_path} has been deleted.")
+            deleted_files.append(file_path)
 
-    st.info("Cached data cleared. Refreshing data. This will take some time.")
+    if deleted_files:
+        st.toast(f"Cleared cached data: {', '.join(deleted_files)}.")
+    else:
+        st.warning("No cached files found to clear.")
 
 # Startup refresh logic
 if not st.session_state.startup_refresh:
@@ -196,7 +200,6 @@ rename_dict = {
     'current_performance_percentage': 'Current Performance (%)',
     'net_performance_percentage': 'Net Performance (%)'
 }
-
 
 file_path = os.path.join('output', 'portfolio_performance_daily.parquet')
 
@@ -251,11 +254,13 @@ with st.sidebar:
 
     # Set default index for "Full Portfolio"
     default_index = product_options.index("Full portfolio")
-    selected_product = st.selectbox("Select a Product", options=product_options, index=default_index, key="product_select")
+    selected_product = st.selectbox("Select a Product", options=product_options, index=default_index,
+                                    key="product_select")
 
     # Dropdown to select another product for comparison
     compare_product_options = ["None"] + product_options
-    selected_compare_product = st.selectbox("Compare with another Product", options=compare_product_options, index=0, key="compare_product_select")
+    selected_compare_product = st.selectbox("Compare with another Product", options=compare_product_options, index=0,
+                                            key="compare_product_select")
 
     # Performance metrics
     performance_metrics = [col for col in df.columns if col not in ['Product', 'Ticker', 'Start Date', 'End Date']]
@@ -265,7 +270,8 @@ with st.sidebar:
 
 # Filter on product
 product_df = df[df['Product'] == selected_product]
-compare_product_df = df[df['Product'] == selected_compare_product] if selected_compare_product != "None" else pd.DataFrame()
+compare_product_df = df[
+    df['Product'] == selected_compare_product] if selected_compare_product != "None" else pd.DataFrame()
 
 # DATE  FILTER    
 # Set the full date range as min and max values for the slider
@@ -306,8 +312,9 @@ date_mapping = {
     "1W": [7, 0],
     "1D": [1, 0],
     "YTD": [days_since_year_start, 0],
-    "Last year": [days_in_last_year+days_since_year_start, days_since_year_start + 1],  # +1 to exclude Jan 1
-    "Last month": [days_in_last_month+days_since_month_start, days_since_month_start + 1],  # +1 to exclude 1st of current month
+    "Last year": [days_in_last_year + days_since_year_start, days_since_year_start + 1],  # +1 to exclude Jan 1
+    "Last month": [days_in_last_month + days_since_month_start, days_since_month_start + 1],
+    # +1 to exclude 1st of current month
     "All time": [(max_date - min_date).days, 0]
 }
 
@@ -315,7 +322,9 @@ selected_start_date = max_date - timedelta(days=date_mapping[date_selection][0])
 selected_end_date = max_date - timedelta(days=date_mapping[date_selection][1])
 
 # Filter data by date range
-filtered_df = product_df[(product_df['End Date'] >= selected_start_date) & (product_df['End Date'] <= selected_end_date)].sort_values(by='End Date')
+filtered_df = product_df[
+    (product_df['End Date'] >= selected_start_date) & (product_df['End Date'] <= selected_end_date)].sort_values(
+    by='End Date')
 
 # st.subheader(f"{selected_product}")
 
@@ -340,7 +349,7 @@ if not filtered_df.empty:
         compare_filtered_df = compare_product_df[
             (compare_product_df['End Date'] >= selected_start_date) &
             (compare_product_df['End Date'] <= selected_end_date)
-        ].sort_values(by='End Date')
+            ].sort_values(by='End Date')
 
         fig.add_scatter(
             x=compare_filtered_df['End Date'],
@@ -373,10 +382,15 @@ if not filtered_df.empty:
     start_date = filtered_df['Start Date'].min()
     end_date = filtered_df['End Date'].max()
     days_held = (end_date - start_date).days
-    annualized_return_pct = (
-        ((current_value / total_cost) ** (365 / days_held) - 1) * 100
-        if total_cost > 0 and days_held > 0 else 0
-    )
+    if total_cost > 0 and days_held > 0:
+        if current_value < 0:
+            annualized_return_pct = -100  # default negative percentage
+        else:
+            annualized_return_pct = (
+                    ((current_value / total_cost) ** (365 / days_held) - 1) * 100
+            )
+    else:
+        annualized_return_pct = 0
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -417,21 +431,21 @@ with st.sidebar:
         refresh_data(uploaded_file)
         st.rerun()
 
-    # Refresh Button to refresh database if env variable is set to true
-    if os.getenv("USE_SUPABASE", "true").lower() == "true":
-        if st.button('Refresh Database'):
-            st.info("Upserting cached data to database and refreshing locally cached data. This will take some time.")
-            # Run db_refresh (API) to update the CSV
-            try:
-                trigger_db_refresh()
-                if st.session_state.startup_refresh:
-                    st.success(f"Database refreshed successfully! (Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
-            except Exception as e:
-                st.error(f"Error occurred while refreshing database: {e}")
-            st.session_state.startup_refresh = False
-            st.rerun()
-    
     if st.button('Clear Cached Data', type="primary"):
         clear_cache()
         st.session_state.startup_refresh = False
         st.rerun()
+
+    # # Refresh Button to refresh database if env variable is set to true
+    # if os.getenv("USE_SUPABASE", "true").lower() == "true":
+    #     if st.button('Refresh Database'):
+    #         st.info("Upserting cached data to database and refreshing locally cached data. This will take some time.")
+    #         # Run db_refresh (API) to update the CSV
+    #         try:
+    #             trigger_db_refresh()
+    #             if st.session_state.startup_refresh:
+    #                 st.success(f"Database refreshed successfully! (Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
+    #         except Exception as e:
+    #             st.error(f"Error occurred while refreshing database: {e}")
+    #         st.session_state.startup_refresh = False
+    #         st.rerun()
