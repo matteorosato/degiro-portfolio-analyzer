@@ -442,6 +442,50 @@ if not filtered_df.empty:
         )
 
     st.divider()
+
+    # ---- Portfolio Composition Section ----
+    st.subheader("Portfolio Composition")
+
+    # Get the latest data for all products in the selected period
+    latest_date = filtered_df['End Date'].max()
+    composition_df = df[df['End Date'] == latest_date].copy()
+
+    # Filter out "Full portfolio" from the composition
+    composition_df = composition_df[composition_df['Product'] != 'Full portfolio']
+
+    if not composition_df.empty and len(composition_df) > 0:
+        # Calculate NAV and NAV % for each product
+        composition_df['NAV'] = composition_df['Current Value (€)']
+        total_nav = composition_df['NAV'].sum()
+        composition_df['NAV %'] = (composition_df['NAV'] / total_nav * 100) if total_nav > 0 else 0
+
+        # Prepare data for display
+        composition_display = composition_df[['Product', 'NAV', 'NAV %']].copy()
+        composition_display = composition_display.sort_values('NAV', ascending=False)
+
+        # Display table first
+        st.dataframe(
+            composition_display.style.format({
+                'NAV': '€ {:,.2f}',
+                'NAV %': '{:.2f}%'
+            }),
+            hide_index=True,
+            use_container_width=True
+        )
+
+        # Create pie chart (displayed below the table)
+        fig_pie = px.pie(
+            composition_display,
+            values='NAV',
+            names='Product'
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.info("No composition data available. Select 'Full portfolio' to see individual holdings.")
+
+    st.divider()
 else:
     st.write("No data available for the selected product and date range.")
 
