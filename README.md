@@ -138,13 +138,17 @@ docker compose up --force-recreate -d --build
 # Initial run
 Go to http://localhost:8501/ to see your stock portfolio dashboard! After running the app, the streamlit port (8501) can be redirected to another domain if desired.
 
-## Upload initial Transactions.csv (from DeGiro)
-- When opening the dashboard for the first time, upload a Transactions.csv file.
-- This transactions file can be found in your DeGiro portfolio. Go to inbox > transactions and select the full date range of all transactions. then click export (csv).
-- Upload the csv in the dashboard. The uploaded file will be stored in the 'uploads' directory in the portfolio-analyzer directory.
+## How to export transactions data from Degiro
+To export your transactions in CSV format, follow the official procedure described by Degiro. You can find the instructions on the official
+[Degiro Helpdesk page](https://www.degiro.com/uk/helpdesk/tax/tax-treaties/which-reports-are-there-and-where-can-i-find-them).
+This page provides step-by-step guidance on how to download your transactions report from your Degiro account.
+
+## Upload initial transactions file
+- When opening the dashboard for the first time, upload the downloaded transactions file.
+- The uploaded file will be stored in the 'uploads' directory in the portfolio-analyzer directory.
 - Reload the page. Loading the dashboard for the first time ([after you've mapped the tickers](#ticker-mapping)) might take a few minutes, depending on the date range of transactions. Subsequent runs will take a few seconds to load.
 
-## Updating Transactions.csv
+## Updating transactions file
 - After new transactions, download the new transactions file from DeGiro. The old file will be overwritten so make sure to select the full date range of transactions each time to not miss any previous transactions.
 - To update the transactions data in the dashboard, upload the new transactions file through the sidebar in the dashboard.
 - Reload the page.
@@ -258,3 +262,9 @@ SUPABASE_URL=https://your-supabase-url
 SUPABASE_KEY=your-supabase-api-key
 EOT
 ```
+
+# Disclaimer
+I am not affiliated with [DEGIRO](https://www.degiro.com/) in any way. This project is an independent, unofficial portfolio analytics tool created to gain better insight and control over my investments. It is not endorsed, supported, or maintained by [DEGIRO](https://www.degiro.com/). Use this tool at your own discretion.
+
+# Credits
+This project is inspired by the work of [Kas Berendsen](https://github.com/kbberendsen) and his repository [portfolio-analyzer](https://github.com/kbberendsen/portfolio-analyzer), from which I have forked and further developed this tool.
