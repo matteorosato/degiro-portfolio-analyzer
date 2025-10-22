@@ -387,26 +387,38 @@ if not filtered_df.empty:
     st.plotly_chart(fig, use_container_width=False)
 
     # ---- Portfolio Summary Section ----
-    st.subheader("Portfolio Summary")
+    # Format the date range for the title
+    period_start_str = selected_start_date.strftime('%Y-%m-%d')
+    period_end_str = selected_end_date.strftime('%Y-%m-%d')
+    st.subheader(f"Portfolio Summary")
+    st.caption(f"Period: {period_start_str} to {period_end_str} "
+               f"({(selected_end_date - selected_start_date).days} days)")
 
-    current_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
-    current_return = filtered_df.iloc[-1].get("Current Money Weighted Return (€)", 0)
-    total_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
-    current_return_pct = (current_return / total_cost * 100) if total_cost != 0 else 0
+    # Get values at the start and end of the selected period
+    period_start_value = filtered_df.iloc[0].get("Current Value (€)", 0) if len(filtered_df) > 0 else 0
+    period_start_cost = filtered_df.iloc[0].get("Total Cost (€)", 0) if len(filtered_df) > 0 else 0
 
-    # Total Return (no + sign, negative values will automatically show "-")
-    total_return_display = f"€ {current_return:,.2f}"
+    period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
+    period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
 
-    # Annualized return calculation
+    # Calculate return for the selected period
+    # Return = (End Value - Start Value) + (End Cost - Start Cost) since cost changes with transactions
+    period_return = (period_end_value - period_start_value) - (period_end_cost - period_start_cost)
+    period_return_pct = ((period_end_value / period_end_cost * 100) - 100) if period_end_cost != 0 else 0
+
+    # Total Return display
+    total_return_display = f"€ {period_return:,.2f}"
+
+    # Annualized return calculation for the selected period
     start_date = filtered_df['Start Date'].min()
     end_date = filtered_df['End Date'].max()
     days_held = (end_date - start_date).days
-    if total_cost > 0 and days_held > 0:
-        if current_value < 0:
+    if period_end_cost > 0 and days_held > 0:
+        if period_end_value <= 0:
             annualized_return_pct = -100  # default negative percentage
         else:
             annualized_return_pct = (
-                    ((current_value / total_cost) ** (365 / days_held) - 1) * 100
+                    ((period_end_value / period_end_cost) ** (365 / days_held) - 1) * 100
             )
     else:
         annualized_return_pct = 0
@@ -414,14 +426,14 @@ if not filtered_df.empty:
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(
-            label="Current Portfolio Value",
-            value=f"€ {current_value:,.2f}",
+            label="Portfolio Value",
+            value=f"€ {period_end_value:,.2f}",
         )
     with col2:
         st.metric(
-            label="Total Return",
+            label="Period Return",
             value=total_return_display,
-            delta=f"{current_return_pct:.2f} %"
+            delta=f"{period_return_pct:.2f} %"
         )
     with col3:
         st.metric(
@@ -434,10 +446,10 @@ else:
     st.write("No data available for the selected product and date range.")
 
 # ---- Additional Metrics Section ----
-st.subheader("Additional Portfolio Metrics")
-
-with st.expander("Data", expanded=False):
-    st.write(filtered_df.drop(columns=['Start Date']))
+# st.subheader("Additional Portfolio Metrics")
+#
+# with st.expander("Data", expanded=False):
+#     st.write(filtered_df.drop(columns=['Start Date']))
 
 # File upload
 with st.sidebar:
