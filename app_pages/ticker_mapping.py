@@ -4,12 +4,12 @@ import os
 import json
 import requests
 import time
+from backend.config import API_BASE_URL, FilePaths
 
 # Set the page title
 st.set_page_config(page_title="Ticker Mapping", page_icon="📊", layout="wide")
 st.title("Ticker Mapping")
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000") # Use environment variable for API URL
 
 # Call transactions processing (API)
 try:
@@ -22,7 +22,7 @@ except Exception as e:
     st.stop()
 
 # Paths
-mapping_path = os.path.join('output', 'isin_mapping.json')
+mapping_path = FilePaths.ISIN_MAPPING
 
 # Load or initialize mapping
 if 'df' not in st.session_state:

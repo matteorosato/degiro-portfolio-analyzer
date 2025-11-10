@@ -4,12 +4,13 @@ import json
 import warnings
 import yfinance as yf
 from backend.utils.logger import app_logger
+from backend.config import FilePaths
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
 # File Paths
-TRANSACTION_FILE = 'uploads/Transactions.csv'
-MAPPING_FILE = 'output/isin_mapping.json'
+TRANSACTION_FILE = FilePaths.TRANSACTION_CSV
+MAPPING_FILE = FilePaths.ISIN_MAPPING
 
 
 def get_yahoo_product(isin: str, exchange: str = "") -> dict:

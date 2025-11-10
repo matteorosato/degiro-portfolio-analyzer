@@ -8,6 +8,7 @@ from backend.utils.logger import app_logger
 from backend.services.transactions import get_transactions
 from backend.services.portfolio_analyzer import PortfolioAnalyzer
 from backend.utils.refresh_status import set_refresh_status, get_refresh_status
+from backend.config import FilePaths
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
@@ -85,7 +86,7 @@ def calc_portfolio():
         
         # Load existing results from Parquet file
         try:
-            portfolio_results_df = pd.read_parquet("output/portfolio_performance_daily.parquet")
+            portfolio_results_df = pd.read_parquet(FilePaths.PORTFOLIO_DAILY)
             app_logger.info("[PORTFOLIO-CALC] Loaded portfolio_performance_daily from Parquet")
 
             # Remove last 2 days to force refresh (get end of day data)
@@ -102,7 +103,7 @@ def calc_portfolio():
         
         # Load stock prices from Parquet file
         try:
-            stock_prices_df = pd.read_parquet('output/stock_prices.parquet')
+            stock_prices_df = pd.read_parquet(FilePaths.STOCK_PRICES)
             stock_prices_df = stock_prices_df.dropna(subset=['price'])
             stock_prices_dict = stock_prices_df.groupby('ticker').apply(lambda x: x.set_index('date')['price'].to_dict()).to_dict()
             app_logger.info("[PORTFOLIO-CALC] Loaded stock_prices from Parquet")
@@ -185,7 +186,7 @@ def calc_portfolio():
         portfolio_results_df['quantity'] = portfolio_results_df['quantity'].astype(int)
 
         # Update product column based on ISIN mapping json
-        with open('output/isin_mapping.json', 'r') as f:
+        with open(FilePaths.ISIN_MAPPING, 'r') as f:
             isin_mapping = json.load(f)
 
         # Build a reverse map: ticker -> display_name
@@ -199,7 +200,7 @@ def calc_portfolio():
 
         # Store parquet files
         # Daily table
-        portfolio_results_df.to_parquet(os.path.join('output', 'portfolio_performance_daily.parquet'), index=False)
+        portfolio_results_df.to_parquet(FilePaths.PORTFOLIO_DAILY, index=False)
 
         # Stock prices
         stock_prices_records = []
@@ -223,7 +224,7 @@ def calc_portfolio():
 
         stock_prices_df = pd.DataFrame(stock_prices_records)
         stock_prices_df = stock_prices_df.dropna(subset=['price'])
-        stock_prices_df.to_parquet(os.path.join('output', 'stock_prices.parquet'), index=False)
+        stock_prices_df.to_parquet(FilePaths.STOCK_PRICES, index=False)
 
         app_logger.info("[PORTFOLIO-CALC] Daily output saved locally")
 
@@ -248,7 +249,7 @@ def calc_portfolio():
         monthly_results_df['end_date'] = monthly_results_df['end_date'].dt.strftime('%Y-%m-%d')
 
         # Save the updated DataFrame to a Parquet file
-        monthly_results_df.to_parquet(os.path.join('output', 'portfolio_performance_monthly.parquet'), index=False)
+        monthly_results_df.to_parquet(FilePaths.PORTFOLIO_MONTHLY, index=False)
         app_logger.info("[PORTFOLIO-CALC] Monthly output saved locally")
         # End timing
         end_time = time.time()

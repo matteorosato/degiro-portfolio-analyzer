@@ -6,15 +6,15 @@ import plotly.express as px
 import requests
 import streamlit as st
 
+from backend.config import Directories, API_BASE_URL, ColumnMappings, FilePaths
 from backend.utils.api import post_api_request
 
-OUTPUT_DIR = "output"
-LOG_DIR = "logs"
-UPLOADS_DIR = "uploads"
+OUTPUT_DIR = Directories.OUTPUT
+LOG_DIR = Directories.LOGS
+UPLOADS_DIR = Directories.UPLOADS
 
 # Config
 st.set_page_config(page_title="Degiro Portfolio Analyzer", page_icon=":bar_chart:", layout="centered")
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")  # Use environment variable for API URL
 
 
 def is_backend_alive():
@@ -28,8 +28,8 @@ def is_backend_alive():
 
 def cached_files_exist():
     cached_files = [
-        os.path.join(OUTPUT_DIR, 'portfolio_performance_daily.parquet'),
-        os.path.join(OUTPUT_DIR, 'stock_prices.parquet')
+        FilePaths.PORTFOLIO_DAILY,
+        FilePaths.STOCK_PRICES
     ]
     return all(os.path.exists(f) for f in cached_files)
 
@@ -150,15 +150,7 @@ def refresh_data(uploaded_file=None):
 
 
 def clear_cache():
-    cached_files = [
-        os.path.join(OUTPUT_DIR, filename)
-        for filename in [
-            'portfolio_performance_monthly.parquet',
-            'portfolio_performance_daily.parquet',
-            'stock_prices.parquet'
-        ]
-    ]
-
+    cached_files = FilePaths.get_all_output_files()
     if not cached_files:
         st.warning("No cached files found to clear.")
         return
@@ -203,24 +195,9 @@ if not st.session_state.startup_refresh:
 loading_placeholder.empty()
 
 # Dictionary to rename the performance metrics columns for display purposes
-rename_dict = {
-    'product': 'Product',
-    'ticker': 'Ticker',
-    'quantity': 'Quantity',
-    'start_date': 'Start Date',
-    'end_date': 'End Date',
-    'avg_cost': 'Average Cost (€)',
-    'total_cost': 'Total Cost (€)',
-    'transaction_costs': 'Transaction Costs (€)',
-    'current_value': 'Current Value (€)',
-    'current_money_weighted_return': 'Current Money Weighted Return (€)',
-    'realized_return': 'Realized Return (€)',
-    'net_return': 'Net Return (€)',
-    'current_performance_percentage': 'Current Performance (%)',
-    'net_performance_percentage': 'Net Performance (%)'
-}
+rename_dict = ColumnMappings.PORTFOLIO_RENAME
 
-portfolio_performance_file = os.path.join(OUTPUT_DIR, 'portfolio_performance_daily.parquet')
+portfolio_performance_file = FilePaths.PORTFOLIO_DAILY
 
 # Check if the file exists before trying to load it
 if os.path.exists(portfolio_performance_file):

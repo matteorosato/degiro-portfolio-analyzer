@@ -4,10 +4,10 @@ import os
 import yfinance as yf
 from datetime import datetime
 from backend.utils.api import post_api_request
+from backend.config import API_BASE_URL, FilePaths, ColumnMappings
 
 # Config
 st.set_page_config(page_title="Stock Split Calculator", page_icon=":bar_chart:", layout="centered")
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") # Use environment variable for API URL
 
 # Backend triggers
 def trigger_portfolio_calculation():
@@ -51,28 +51,13 @@ def get_current_stock_price(ticker_symbol):
         return None
 
 # Dictionary to rename the performance metrics columns for display purposes
-rename_dict = {
-    'product': 'Product',
-    'ticker': 'Ticker',
-    'quantity': 'Quantity',
-    'start_date': 'Start Date',
-    'end_date': 'End Date',
-    'avg_cost': 'Average Cost (€)',
-    'total_cost': 'Total Cost (€)',
-    'transaction_costs': 'Transaction Costs (€)',
-    'current_value': 'Current Value (€)',
-    'current_money_weighted_return': 'Current Money Weighted Return (€)',
-    'realized_return': 'Realized Return (€)',
-    'net_return': 'Net Return (€)',
-    'current_performance_percentage': 'Current Performance (%)',
-    'net_performance_percentage': 'Net Performance (%)'
-}
+rename_dict = ColumnMappings.PORTFOLIO_RENAME
 
 # Load portfolio data
-portfolio_file = os.path.join('output', 'portfolio_performance_daily.parquet')
+portfolio_file = FilePaths.PORTFOLIO_DAILY
 if os.path.exists(portfolio_file):
     # Load daily data
-    daily_df = pd.read_parquet(os.path.join('output', 'portfolio_performance_daily.parquet'))
+    daily_df = pd.read_parquet(FilePaths.PORTFOLIO_DAILY)
     daily_df = daily_df.rename(columns=rename_dict)
 
     # Get the most recent data
@@ -154,8 +139,6 @@ if os.path.exists(portfolio_file):
         st.subheader('Amount to Buy')
         st.dataframe(st.session_state.result_df.reset_index(drop=True))
         st.metric(label='Investment needed', value=f'€ {st.session_state.investment_needed}')
-
-    rerun = 0
 
     st.divider()
 

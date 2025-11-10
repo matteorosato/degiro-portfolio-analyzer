@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
+from backend.config import FilePaths
 
 router = APIRouter()
 
-SCHEDULER_LOG_FILE_PATH = "logs/scheduler.log"
-APP_LOG_FILE_PATH = "logs/app.log"
+SCHEDULER_LOG_FILE_PATH = FilePaths.SCHEDULER_LOG
+APP_LOG_FILE_PATH = FilePaths.APP_LOG
 
 @router.get("/scheduler")
 def read_logs(lines: int = 50) -> List[str]:

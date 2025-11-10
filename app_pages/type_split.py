@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import os
 import json
+from backend.config import FilePaths, ColumnMappings
 
 # Set the page title
 st.set_page_config(page_title="Portfolio Analysis - Split", page_icon="📊", layout="centered")
@@ -11,26 +12,11 @@ st.set_page_config(page_title="Portfolio Analysis - Split", page_icon="📊", la
 st.title("Portfolio Analysis - Split")
 
 # Load portfolio data
-portfolio_file = os.path.join('output', 'portfolio_performance_daily.parquet')
-mapping_path = os.path.join('output', 'isin_mapping.json')
+portfolio_file = FilePaths.PORTFOLIO_DAILY
+mapping_path = FilePaths.ISIN_MAPPING
 
 # Dictionary to rename the performance metrics columns for display purposes
-rename_dict = {
-    'product': 'Product',
-    'ticker': 'Ticker',
-    'quantity': 'Quantity',
-    'start_date': 'Start Date',
-    'end_date': 'End Date',
-    'avg_cost': 'Average Cost (€)',
-    'total_cost': 'Total Cost (€)',
-    'transaction_costs': 'Transaction Costs (€)',
-    'current_value': 'Current Value (€)',
-    'current_money_weighted_return': 'Current Money Weighted Return (€)',
-    'realized_return': 'Realized Return (€)',
-    'net_return': 'Net Return (€)',
-    'current_performance_percentage': 'Current Performance (%)',
-    'net_performance_percentage': 'Net Performance (%)'
-}
+rename_dict = ColumnMappings.PORTFOLIO_RENAME
 
 if os.path.exists(portfolio_file):
     # Load monthly and daily data

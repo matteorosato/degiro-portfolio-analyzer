@@ -3,6 +3,7 @@ import yfinance as yf
 from datetime import datetime, date
 import json
 import warnings
+from backend.config import FilePaths
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
@@ -90,7 +91,7 @@ class PortfolioAnalyzer:
         all_transactions.sort_values(by=["Date", "Time"], inplace=True)
 
         # Load ISIN mapping from JSON
-        with open('output/isin_mapping.json', 'r') as f:
+        with open(FilePaths.ISIN_MAPPING, 'r') as f:
             isin_mapping = json.load(f)
 
         # Build a reverse map: ticker -> display_name
