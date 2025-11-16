@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/kbberendsen/portfolio-analyzer:latest
+    image: ghcr.io/matteorosato/degiro-portfolio-analyzer:latest
     ports:
       - "8501:8501"     # Streamlit (public)
     expose:

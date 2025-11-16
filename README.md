@@ -119,7 +119,7 @@ cd portfolio-analyzer
 
 ### Download the docker-compose.yaml from GitHub
 ```
-curl -O https://raw.githubusercontent.com/kbberendsen/portfolio-analyzer/main/docker-compose.yaml
+curl -O https://raw.githubusercontent.com/matteorosato/degiro-portfolio-analyzer/main/docker-compose.yaml
 ```
 
 ### Build and run the Docker container
