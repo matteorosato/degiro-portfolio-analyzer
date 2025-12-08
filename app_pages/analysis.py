@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime, timedelta
 import os
 from backend.config import FilePaths, ColumnMappings
@@ -49,47 +48,40 @@ if os.path.exists(portfolio_file):
         st.error("No data found for the selected date. Please select a different date.")
         st.stop()
     
-    # Get recent two distinct dates
-    filtered_dates = filtered_df['End Date'].unique()[-2:]
-    filtered_dates = sorted(filtered_dates)
-    date_0 = filtered_dates[0]
-    date_1 = filtered_dates[1] if len(filtered_dates) > 1 else date_0
+    # Get the last date and the previous date for daily change calculation
+    all_dates = sorted(df['End Date'].unique())
+    selected_date_ts = pd.Timestamp(selected_date)
 
-    # Top net return
-    top_net_return_start = filtered_df[filtered_df['End Date'] == date_0].get('Net Return (€)', 0).sum()
-    top_net_return_end = filtered_df[filtered_df['End Date'] == date_1].get('Net Return (€)', 0).sum()
-
-    if top_net_return_start != 0:
-        top_net_return_delta = round((top_net_return_end-top_net_return_start), 2)
-        top_net_return_delta_eur = f"+€ {abs(top_net_return_delta)}" if top_net_return_delta > 0 else f"-€ {abs(top_net_return_delta)}"
-        top_net_return_delta_per = round(((top_net_return_end-top_net_return_start)/abs(top_net_return_start))*100, 2)
+    # Find the index of the selected date (or the closest date before it)
+    valid_dates = [d for d in all_dates if d <= selected_date_ts]
+    if not valid_dates:
+        # If no date before selected_date, use the first date
+        date_1 = all_dates[0]
+        date_0 = all_dates[0]
     else:
-        top_net_return_delta_eur = 0
-        top_net_return_delta_per = 0
+        date_1 = valid_dates[-1]  # Most recent valid date
+        date_1_idx = all_dates.index(date_1)
+        date_0 = all_dates[date_1_idx - 1] if date_1_idx > 0 else date_1  # Previous date
 
-    # Top current value
-    top_current_value_start = filtered_df[filtered_df['End Date'] == date_0].get('Current Value (€)', 0).sum()
-    top_current_value_end = filtered_df[filtered_df['End Date'] == date_1].get('Current Value (€)', 0).sum()
+    # Daily change in current value (1 day: yesterday vs today)
+    daily_current_value_start = df[df['End Date'] == date_0]['Current Value (€)'].sum()
+    daily_current_value_end = df[df['End Date'] == date_1]['Current Value (€)'].sum()
 
-    if top_current_value_start != 0:
-        top_current_value_delta = round((top_current_value_end-top_current_value_start), 2)
-        top_current_value_delta_eur = f"+€ {abs(top_current_value_delta)}" if top_current_value_delta > 0 else f"-€ {abs(top_current_value_delta)}"
-        top_current_value_delta_per = round(((top_current_value_end-top_current_value_start)/(top_current_value_start))*100, 2)
+    if daily_current_value_start != 0:
+        daily_current_value_delta = round((daily_current_value_end - daily_current_value_start), 2)
+        daily_current_value_delta_eur = f"+€ {abs(daily_current_value_delta)}" if daily_current_value_delta > 0 else f"-€ {abs(daily_current_value_delta)}"
+        daily_current_value_delta_per = round(((daily_current_value_end - daily_current_value_start) / daily_current_value_start) * 100, 2)
     else:
-        top_current_value_delta_eur = 0
-        top_current_value_delta_per = 0
+        daily_current_value_delta = 0
+        daily_current_value_delta_eur = "€ 0"
+        daily_current_value_delta_per = 0
 
-    # Today profit/loss
-    today_pl = top_net_return_delta
-    today_pl_per = top_net_return_delta_per
+    # Current portfolio value (at selected date)
+    current_portfolio_value = df[df['End Date'] == date_1]['Current Value (€)'].sum()
 
-    # Filter the DataFrame for the recent selected date
+    # Filter the DataFrame for the selected date
     selected_day_df = df[df['End Date'] == date_1]
 
-    # Total profit/loss
-    total_pl = selected_day_df['Net Return (€)'].sum()
-    total_pl_per = selected_day_df['Net Return (€)'].sum() / selected_day_df['Total Cost (€)'].sum() * 100 if selected_day_df['Total Cost (€)'].sum() != 0 else 0
-    
     # Filter based on holdings option
     if holdings_option == "Current Holdings":
         selected_day_df = selected_day_df[selected_day_df["Quantity"] != 0]
@@ -147,19 +139,18 @@ if os.path.exists(portfolio_file):
     display_df_styled = display_df.style.map(color_net_performance, subset=["Net Performance (%)", "Net Return (€)"])
 
     # Top badges
-    badge_value_color = 'green' if top_current_value_delta > 0 else 'red' if top_current_value_delta < 0 else 'gray'
-    badge_value_icon = ':material/arrow_upward:' if top_current_value_delta > 0 else ':material/arrow_downward:' if top_current_value_delta < 0 else ':material/info:'
-    badge_value_text = f"Portfolio: € {abs(top_current_value_end):,.2f} (∆ +{top_current_value_delta_per}% | {top_current_value_delta_eur}) "if top_current_value_delta > 0 \
-                    else f"Portfolio: € {abs(top_current_value_end):,.2f} (∆ {top_current_value_delta_per}% | {top_current_value_delta_eur}) " if top_current_value_delta < 0 \
-                    else "Portfolio Empty"
+    badge_value_color = 'green' if daily_current_value_delta > 0 else 'red' if daily_current_value_delta < 0 else 'gray'
+    badge_value_icon = ':material/arrow_upward:' if daily_current_value_delta > 0 else ':material/arrow_downward:' if daily_current_value_delta < 0 else ':material/info:'
+    badge_value_text = f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ +{daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta > 0 \
+                    else f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ {daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta < 0 \
+                    else f"Portfolio Value: € {abs(current_portfolio_value):,.2f}"
 
-    badge_total_pl_color = 'green' if total_pl > 0 else 'red' if total_pl < 0 else 'gray'
-    badge_total_pl_icon = ':material/arrow_upward:' if total_pl > 0 else ':material/arrow_downward:' if total_pl < 0 else ':material/info:'
-    badge_total_pl_text = f"All-time Profit: {total_pl_per:.2f}% (€ {abs(total_pl):,.2f})" if total_pl > 0 \
-                    else f"All-time Loss: {total_pl_per:.2f}% (-€ {abs(total_pl):,.2f})" if total_pl < 0 \
-                    else "No Profit/Loss"
-    
-    st.markdown(f":{badge_value_color}-badge[{badge_value_icon} {badge_value_text}] :{badge_total_pl_color}-badge[{badge_total_pl_icon} {badge_total_pl_text}]")
+    st.markdown(
+        f":{badge_value_color}-badge[{badge_value_icon} {badge_value_text}]",
+        help="""
+**Portfolio Value:** Shows the current portfolio value with the daily change (previous day vs selected date) in euros and percentage.
+        """
+    )
 
     # Show dataframe
     st.dataframe(
