@@ -8,6 +8,8 @@ import streamlit as st
 
 from backend.config import Directories, API_BASE_URL, ColumnMappings, FilePaths
 from backend.utils.api import post_api_request
+from backend.utils.logger import app_logger
+from backend.services.transactions import get_transactions
 
 OUTPUT_DIR = Directories.OUTPUT
 LOG_DIR = Directories.LOGS
@@ -123,7 +125,11 @@ loading_placeholder = st.empty()
 
 # Define startup refresh state variable
 if st.session_state.get("startup_refresh") is None:
-    st.session_state.startup_refresh = False  # Indicates refresh hasn't been run yet
+    st.session_state.startup_refresh = False
+if st.session_state.get("pending_file_upload") is None:
+    st.session_state.pending_file_upload = None
+if st.session_state.get("show_upload_confirmation") is None:
+    st.session_state.show_upload_confirmation = False
 
 
 def refresh_data(uploaded_file=None):
@@ -135,15 +141,12 @@ def refresh_data(uploaded_file=None):
             return
         transaction_file = os.path.join(UPLOADS_DIR, 'Transactions.csv')
         df.to_csv(transaction_file, index=False)
-        st.success(f"Data saved to {transaction_file}")
 
     # Trigger the backend API to refresh data
     try:
         # Check if initial db load is needed
         initial_db_load()
         trigger_portfolio_calculation()
-        if st.session_state.startup_refresh:
-            st.success(f"Data updated successfully! (Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
 
     except Exception as e:
         st.error(f"Error occurred while refreshing data: {e}")
@@ -272,7 +275,20 @@ compare_product_df = df[
 # DATE  FILTER    
 # Set the full date range as min and max values for the slider
 max_date = df['End Date'].max().to_pydatetime()
-min_date = df['End Date'].min().to_pydatetime()
+
+# Get min_date from the FIRST TRANSACTION, not from parquet data
+# Parquet may start after first transaction if it begins on a weekend/non-trading day
+try:
+    transactions_for_min_date = get_transactions()
+    if not transactions_for_min_date.empty:
+        transactions_for_min_date['Date'] = pd.to_datetime(transactions_for_min_date['Date'])
+        first_transaction_date = transactions_for_min_date['Date'].min().to_pydatetime()
+        min_date = first_transaction_date
+    else:
+        min_date = df['End Date'].min().to_pydatetime()
+except Exception as e:
+    app_logger.warning(f"Could not load first transaction date: {e}. Using parquet min date.")
+    min_date = df['End Date'].min().to_pydatetime()
 
 # Date selection
 date_selection = st.segmented_control(
@@ -378,44 +394,44 @@ if not filtered_df.empty:
     period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
     period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
 
-    # Calculate return for the selected period
-    # Return = (End Value - Start Value) + (End Cost - Start Cost) since cost changes with transactions
-    period_return = (period_end_value - period_start_value) - (period_end_cost - period_start_cost)
-    period_return_pct = ((period_end_value / period_end_cost * 100) - 100) if period_end_cost != 0 else 0
+    # Calculate net cash flows during the period (cost invested in the period)
+    # Total Cost is cumulative, so the difference tells us how much was invested/withdrawn
+    net_cash_flows_period = period_end_cost - period_start_cost
 
-    # Total Return display
-    total_return_display = f"€ {period_return:,.2f}"
+    # Calculate Period Return in € considering cash flows
+    # Period Return = (End Value - Start Value) - Net Cash Invested
+    # This shows the actual gain/loss excluding the effect of new money added
+    period_return_euro = period_end_value - period_start_value - net_cash_flows_period
 
-    # Annualized return calculation for the selected period
-    start_date = filtered_df['Start Date'].min()
-    end_date = filtered_df['End Date'].max()
-    days_held = (end_date - start_date).days
-    if period_end_cost > 0 and days_held > 0:
-        if period_end_value <= 0:
-            annualized_return_pct = -100  # default negative percentage
-        else:
-            annualized_return_pct = (
-                    ((period_end_value / period_end_cost) ** (365 / days_held) - 1) * 100
-            )
+    # Calculate Period Performance %
+    # Performance % = Period Return / (Start Value + Net Cash Invested) * 100
+    # We use the average capital employed during the period
+    if period_start_value + net_cash_flows_period != 0:
+        period_performance_pct = (period_return_euro / (period_start_value + net_cash_flows_period)) * 100
     else:
-        annualized_return_pct = 0
+        period_performance_pct = 0
 
     col1, col2, col3 = st.columns(3)
     with col1:
+        # Portfolio Value: current value at end of period
         st.metric(
             label="Portfolio Value",
             value=f"€ {period_end_value:,.2f}",
         )
     with col2:
+        # Period Return: gain/loss in € after accounting for cash flows
+        # Formula: (End Value - Start Value) - Net Cash Invested
+        # Shows the actual profit/loss excluding the effect of new money added
         st.metric(
             label="Period Return",
-            value=total_return_display,
-            delta=f"{period_return_pct:.2f} %"
+            value=f"€ {period_return_euro:,.2f}"
         )
     with col3:
+        # Period Performance: return as percentage with +/- sign
+        performance_sign = "+" if period_performance_pct >= 0 else ""
         st.metric(
-            label="Annualized Return (CAGR)",
-            value=f"{annualized_return_pct:.2f} %"
+            label="Period Performance",
+            value=f"{performance_sign}{period_performance_pct:.2f}%"
         )
 
     st.divider()
@@ -472,15 +488,46 @@ else:
 # with st.expander("Data", expanded=False):
 #     st.write(filtered_df.drop(columns=['Start Date']))
 
-# File upload
+# Show confirmation dialog if file is pending
+if st.session_state.show_upload_confirmation and st.session_state.pending_file_upload is not None:
+    st.divider()
+    with st.container(border=True):
+        col_center_1, col_center_2, col_center_3 = st.columns([1, 2, 1])
+        with col_center_2:
+            st.warning("Replace Transactions File?")
+            st.markdown("Uploading a new transactions file will replace the existing one and recalculate your entire portfolio. This action cannot be undone.")
+
+            col_btn_1, col_btn_2 = st.columns(2)
+            with col_btn_1:
+                if st.button("OK", use_container_width=True, type="primary", key="confirm_upload"):
+                    with st.spinner("Processing and recalculating portfolio..."):
+                        refresh_data(st.session_state.pending_file_upload)
+                        st.success("File uploaded and portfolio recalculated successfully!")
+                    st.session_state.show_upload_confirmation = False
+                    st.session_state.pending_file_upload = None
+                    st.session_state.startup_refresh = False
+                    st.rerun()
+
+            with col_btn_2:
+                if st.button("Cancel", use_container_width=True, key="cancel_upload"):
+                    st.session_state.show_upload_confirmation = False
+                    st.session_state.pending_file_upload = None
+                    st.rerun()
+
+# File upload in sidebar
 with st.sidebar:
-    # File uploader for the user to upload a new CSV file
     uploaded_file = st.file_uploader("Upload New Transactions CSV", type=["csv"])
 
-    # Refresh Button to update the CSV
+    if uploaded_file is not None:
+        st.session_state.pending_file_upload = uploaded_file
+        st.session_state.show_upload_confirmation = True
+
     if st.button('Refresh Data'):
         st.session_state.startup_refresh = False
-        refresh_data(uploaded_file)
+        with st.spinner("Refreshing data..."):
+            refresh_data(None)
+        st.success(f"Data updated successfully! (Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
+        st.session_state.startup_refresh = True
         st.rerun()
 
     if st.button('Clear Cached Data', type="primary"):
@@ -488,16 +535,3 @@ with st.sidebar:
         st.session_state.startup_refresh = False
         st.rerun()
 
-    # # Refresh Button to refresh database if env variable is set to true
-    # if os.getenv("USE_SUPABASE", "true").lower() == "true":
-    #     if st.button('Refresh Database'):
-    #         st.info("Upserting cached data to database and refreshing locally cached data. This will take some time.")
-    #         # Run db_refresh (API) to update the CSV
-    #         try:
-    #             trigger_db_refresh()
-    #             if st.session_state.startup_refresh:
-    #                 st.success(f"Database refreshed successfully! (Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
-    #         except Exception as e:
-    #             st.error(f"Error occurred while refreshing database: {e}")
-    #         st.session_state.startup_refresh = False
-    #         st.rerun()
