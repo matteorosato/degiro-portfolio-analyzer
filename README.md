@@ -195,7 +195,7 @@ After uploading your transaction data, the app requires **stock tickers** (e.g.,
 The app supports **currency conversion** for products priced in different currencies. It uses [Yahoo Finance](https://finance.yahoo.com) to fetch exchange rates. The app will automatically convert all prices to Euro.
 
 # Disclaimer
-I am not affiliated with [DEGIRO](https://www.degiro.com/) in any way. This project is an independent, unofficial portfolio analytics tool created to gain better insight and control over my investments. It is not endorsed, supported, or maintained by [DEGIRO](https://www.degiro.com/). Use this tool at your own discretion.
+I am not affiliated with [DEGIRO](https://www.degiro.com/) in any way. This project is an independent, unofficial portfolio analytics tool created to gain better insight and control over personal investments. It is not endorsed, supported, or maintained by [DEGIRO](https://www.degiro.com/). Use this tool at your own discretion.
 
 # Credits
 This project is inspired by the work of [Kas Berendsen](https://github.com/kbberendsen) and his repository [portfolio-analyzer](https://github.com/kbberendsen/portfolio-analyzer), from which I have forked and further developed this tool.
