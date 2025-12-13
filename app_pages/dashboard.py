@@ -130,6 +130,38 @@ if st.session_state.get("pending_file_upload") is None:
     st.session_state.pending_file_upload = None
 if st.session_state.get("show_upload_confirmation") is None:
     st.session_state.show_upload_confirmation = False
+if st.session_state.get("upload_count") is None:
+    st.session_state.upload_count = 0
+if st.session_state.get("processing") is None:
+    st.session_state.processing = False
+
+
+@st.dialog("Confirm Upload")
+def confirm_upload_dialog():
+    st.warning("Replace Transactions File?")
+    st.markdown("Uploading a new transactions file will replace the existing one and recalculate your entire portfolio. This action cannot be undone.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("OK", use_container_width=True, type="primary"):
+            st.session_state.processing = True
+            st.rerun()
+    
+    with col2:
+        if st.button("Cancel", use_container_width=True):
+            st.session_state.pending_file_upload = None
+            st.session_state.upload_count += 1
+            st.rerun()
+    
+    if st.session_state.get("processing"):
+        with st.spinner("Processing and recalculating portfolio..."):
+            refresh_data(st.session_state.pending_file_upload)
+        st.success("File uploaded and portfolio recalculated successfully!")
+        st.session_state.processing = False
+        st.session_state.pending_file_upload = None
+        st.session_state.startup_refresh = False
+        st.session_state.upload_count += 1
+        st.rerun()
 
 
 def refresh_data(uploaded_file=None):
@@ -488,39 +520,13 @@ else:
 # with st.expander("Data", expanded=False):
 #     st.write(filtered_df.drop(columns=['Start Date']))
 
-# Show confirmation dialog if file is pending
-if st.session_state.show_upload_confirmation and st.session_state.pending_file_upload is not None:
-    st.divider()
-    with st.container(border=True):
-        col_center_1, col_center_2, col_center_3 = st.columns([1, 2, 1])
-        with col_center_2:
-            st.warning("Replace Transactions File?")
-            st.markdown("Uploading a new transactions file will replace the existing one and recalculate your entire portfolio. This action cannot be undone.")
-
-            col_btn_1, col_btn_2 = st.columns(2)
-            with col_btn_1:
-                if st.button("OK", use_container_width=True, type="primary", key="confirm_upload"):
-                    with st.spinner("Processing and recalculating portfolio..."):
-                        refresh_data(st.session_state.pending_file_upload)
-                        st.success("File uploaded and portfolio recalculated successfully!")
-                    st.session_state.show_upload_confirmation = False
-                    st.session_state.pending_file_upload = None
-                    st.session_state.startup_refresh = False
-                    st.rerun()
-
-            with col_btn_2:
-                if st.button("Cancel", use_container_width=True, key="cancel_upload"):
-                    st.session_state.show_upload_confirmation = False
-                    st.session_state.pending_file_upload = None
-                    st.rerun()
-
 # File upload in sidebar
 with st.sidebar:
-    uploaded_file = st.file_uploader("Upload New Transactions CSV", type=["csv"])
+    uploaded_file = st.file_uploader("Upload New Transactions CSV", type=["csv"], key=f"uploader_{st.session_state.upload_count}")
 
     if uploaded_file is not None:
         st.session_state.pending_file_upload = uploaded_file
-        st.session_state.show_upload_confirmation = True
+        confirm_upload_dialog()
 
     if st.button('Refresh Data'):
         st.session_state.startup_refresh = False
@@ -534,4 +540,3 @@ with st.sidebar:
         clear_cache()
         st.session_state.startup_refresh = False
         st.rerun()
-
