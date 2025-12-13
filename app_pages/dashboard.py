@@ -528,7 +528,9 @@ with st.sidebar:
         st.session_state.pending_file_upload = uploaded_file
         confirm_upload_dialog()
 
-    if st.button('Refresh Data'):
+    st.divider()
+
+    if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True, help="Recalculates your portfolio with current data"):
         st.session_state.startup_refresh = False
         with st.spinner("Refreshing data..."):
             refresh_data(None)
@@ -536,7 +538,14 @@ with st.sidebar:
         st.session_state.startup_refresh = True
         st.rerun()
 
-    if st.button('Clear Cached Data', type="primary"):
-        clear_cache()
-        st.session_state.startup_refresh = False
-        st.rerun()
+    st.divider()
+
+    with st.expander("🔧 Troubleshooting", expanded=False):
+        if st.button('🗑️ Clear Cached Data', use_container_width=True, type="secondary", help="Deletes cached calculations. Your transaction data will be preserved."):
+            with st.spinner("Clearing cache..."):
+                clear_cache()
+            st.success("Cache cleared successfully! The app will now reload.")
+            st.session_state.startup_refresh = False
+            st.sleep(1)
+            st.rerun()
+
