@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 import streamlit as st
+import time
 
 from backend.config import Directories, API_BASE_URL, ColumnMappings, FilePaths
 from backend.utils.api import post_api_request
@@ -134,6 +135,8 @@ if st.session_state.get("upload_count") is None:
     st.session_state.upload_count = 0
 if st.session_state.get("processing") is None:
     st.session_state.processing = False
+if st.session_state.get("reset_processing") is None:
+    st.session_state.reset_processing = False
 
 
 @st.dialog("Confirm Upload")
@@ -161,6 +164,22 @@ def confirm_upload_dialog():
         st.session_state.pending_file_upload = None
         st.session_state.startup_refresh = False
         st.session_state.upload_count += 1
+        st.rerun()
+
+
+@st.dialog("Reset Everything")
+def reset_confirm_dialog():
+    st.warning("**WARNING: This will delete EVERYTHING including your transaction file!**")
+    st.markdown("This action **cannot be undone**. You will need to re-upload your transactions.")
+    
+    if st.button("Yes, Reset All", use_container_width=True, type="primary"):
+        with st.spinner("Resetting everything..."):
+            reset_all()
+        st.success("Reset complete! The app will now restart.")
+        st.session_state.startup_refresh = False
+        st.rerun()
+    
+    if st.button("Cancel", use_container_width=True):
         st.rerun()
 
 
@@ -204,6 +223,28 @@ def clear_cache():
             st.error(f"Error deleting {file_path}: {e}")
 
 
+def reset_all():
+    """Reset everything: delete cache AND transaction file"""
+    # Delete cached files
+    cached_files = FilePaths.get_all_output_files()
+    for file_path in cached_files:
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+                st.info(f"Deleted {os.path.basename(file_path)}")
+        except Exception as e:
+            st.error(f"Error deleting {file_path}: {e}")
+    
+    # Delete transaction file
+    transaction_file = os.path.join(UPLOADS_DIR, 'Transactions.csv')
+    try:
+        if os.path.exists(transaction_file):
+            os.remove(transaction_file)
+            st.info("Deleted Transactions.csv")
+    except Exception as e:
+        st.error(f"Error deleting transactions file: {e}")
+
+
 # Startup refresh logic
 if not st.session_state.startup_refresh:
 
@@ -216,7 +257,7 @@ if not st.session_state.startup_refresh:
             st.error(f"Error during data refreshing process: {e}")
     else:
         # No cached files -> Run blocking calculation synchronously
-        with st.spinner("No cached data found. Running initial portfolio calculation..."):
+        with st.spinner("Running initial portfolio calculation (this may take some time)..."):
             try:
                 refresh_data()
                 st.toast("Initial portfolio calculation completed successfully.")
@@ -541,11 +582,6 @@ with st.sidebar:
     st.divider()
 
     with st.expander("🔧 Troubleshooting", expanded=False):
-        if st.button('🗑️ Clear Cached Data', use_container_width=True, type="secondary", help="Deletes cached calculations. Your transaction data will be preserved."):
-            with st.spinner("Clearing cache..."):
-                clear_cache()
-            st.success("Cache cleared successfully! The app will now reload.")
-            st.session_state.startup_refresh = False
-            st.sleep(1)
-            st.rerun()
+        if st.button('⚠️ Reset Everything', use_container_width=True, type="secondary", help="Deletes all cached files AND your transaction data. Restarts the app from scratch."):
+            reset_confirm_dialog()
 
