@@ -28,7 +28,9 @@ def get_yahoo_product(isin: str, exchange: str = None) -> dict:
     if not results_by_isin.quotes:
         return {}
 
-    product_long_name = results_by_isin.quotes[0]['longname']
+    product_long_name = results_by_isin.quotes[0].get('longname')
+    if not product_long_name:
+        return {}
     results_by_product_name = yf.Search(product_long_name, max_results=20)
     if not results_by_product_name.quotes or not exchange:
         return {}
@@ -78,7 +80,10 @@ def update_isin_mapping_json(df: pd.DataFrame):
 
     # Add new ISINs to the mapping without overwriting existing entries
     for isin, name, exchange in isin_list.values:
-        product = get_yahoo_product(isin=isin, exchange=degiro_2_yf_mapping.get(exchange))
+        try:
+            product = get_yahoo_product(isin=isin, exchange=degiro_2_yf_mapping.get(exchange))
+        except Exception as e:
+            product = {}
         if isin not in existing_mapping:
             app_logger.info(f"[ISIN-MAPPING] Adding new ISIN mapping: {isin} -> {name}")
             existing_mapping[isin] = {
@@ -102,10 +107,13 @@ def update_isin_mapping_json(df: pd.DataFrame):
     
     return existing_mapping
 
-def load_and_prepare_data() -> pd.DataFrame:
+
+def load_data() -> pd.DataFrame:
     """
-    Loads transactions from CSV, updates mappings, and cleans the data.
-    This incorporates the logic from the old `process_transactions` function.
+    Loads transactions from CSV and performs basic column mapping.
+
+    Returns:
+        pd.DataFrame: Raw transaction data with standardized column names
     """
     if not os.path.exists(TRANSACTION_FILE):
         app_logger.warning(f"[TRANSACTIONS] Transaction file not found at {TRANSACTION_FILE}")
@@ -151,14 +159,31 @@ def load_and_prepare_data() -> pd.DataFrame:
             inplace=True
         )
 
-        # First, update the ISIN mapping file based on the raw transactions
-        try:
-            app_logger.info("[ISIN-MAPPING] Updating ISIN mapping from transaction data...")
-            isin_mapping = update_isin_mapping_json(df)
-            app_logger.info("[ISIN-MAPPING] ISIN mapping updated successfully.")
-        except Exception as e:
-            app_logger.error(f"[ISIN-MAPPING] Error updating ISIN mapping: {e}", exc_info=True)
-            isin_mapping = {}
+        return df
+
+    except Exception as e:
+        app_logger.error(f"[TRANSACTIONS] Error loading transaction data: {e}", exc_info=True)
+        return pd.DataFrame()
+
+
+def map_isin(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Updates ISIN mapping file and applies ticker mapping to the DataFrame.
+
+    Args:
+        df: Raw transaction DataFrame from load_data()
+
+    Returns:
+        pd.DataFrame: DataFrame with Stock and Product columns added from mapping
+    """
+    if df.empty:
+        return df
+
+    try:
+        # Update the ISIN mapping file based on the raw transactions
+        app_logger.info("[ISIN-MAPPING] Updating ISIN mapping from transaction data...")
+        isin_mapping = update_isin_mapping_json(df)
+        app_logger.info("[ISIN-MAPPING] ISIN mapping updated successfully.")
 
         # Apply the mapping to the DataFrame
         if isin_mapping:
@@ -168,7 +193,32 @@ def load_and_prepare_data() -> pd.DataFrame:
             df['Stock'] = ''
             df['Product'] = ''
 
-        # Data cleaning
+        return df
+
+    except Exception as e:
+        app_logger.error(f"[ISIN-MAPPING] Error during ISIN mapping: {e}", exc_info=True)
+        # Add empty Stock and Product columns if mapping fails
+        df['Stock'] = ''
+        df['Product'] = ''
+        return df
+
+
+def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cleans and transforms transaction data.
+    Assumes Stock and Product columns are already present from map_isin().
+
+    Args:
+        df: Transaction DataFrame from map_isin()
+
+    Returns:
+        pd.DataFrame: Cleaned and processed transaction data
+    """
+    if df.empty:
+        return df
+
+    try:
+        # Data cleaning and transformation
         df['Action'] = df['Quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
         df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
         df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
@@ -211,17 +261,29 @@ def load_and_prepare_data() -> pd.DataFrame:
         return df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
 
     except Exception as e:
-        app_logger.error(f"[TRANSACTIONS] Error loading or processing transaction data: {e}", exc_info=True)
+        app_logger.error(f"[TRANSACTIONS] Error preparing transaction data: {e}", exc_info=True)
         return pd.DataFrame()
+
 
 def get_transactions() -> pd.DataFrame:
     """
     Returns a copy of the cleaned transactions DataFrame.
+    Workflow: load_data() → map_isin() → prepare_data()
+
     Ensures consumers can't modify the original data.
     """
     try:
         app_logger.info("[TRANSACTIONS] Processing transactions...")
-        transactions_df = load_and_prepare_data()
+
+        # Step 1: Load raw data from CSV and standardize columns
+        raw_df = load_data()
+
+        # Step 2: Update ISIN mapping and apply Stock/Product mapping
+        mapped_df = map_isin(raw_df)
+
+        # Step 3: Clean and transform the data
+        transactions_df = prepare_data(mapped_df)
+
         app_logger.info("[TRANSACTIONS] Transactions processed successfully.")
 
     except Exception as e:
