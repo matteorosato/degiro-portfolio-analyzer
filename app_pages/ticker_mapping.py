@@ -4,7 +4,7 @@ import os
 import json
 import requests
 import time
-from backend.config import API_BASE_URL, FilePaths
+from backend.config import APIEndpoints, FilePaths
 
 # Set the page title
 st.set_page_config(page_title="Ticker Mapping", page_icon="📊", layout="wide")
@@ -13,7 +13,7 @@ st.title("Ticker Mapping")
 
 # Call transactions processing (API)
 try:
-    transactions_url = f"{API_BASE_URL}/transactions/all"
+    transactions_url = APIEndpoints.build_url(APIEndpoints.TRANSACTIONS_ALL)
     response = requests.get(transactions_url)
 
 except Exception as e:

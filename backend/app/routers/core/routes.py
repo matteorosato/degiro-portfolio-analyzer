@@ -1,7 +1,7 @@
 """Core infrastructure routes - health checks, debugging, and logs."""
 from fastapi import APIRouter, HTTPException
 from typing import List
-from backend.app.core.config import config
+from backend.app.core.config import settings, config
 from backend.app.shared.logger import app_logger
 from backend.app.shared.scheduler import scheduled_portfolio_job
 
@@ -22,7 +22,7 @@ async def health_check():
         "status": "healthy",
         "app": config.PROJECT_NAME,
         "version": config.API_VERSION,
-        "environment": "development" if config.DEV_MODE else "production"
+        "environment": "development" if settings.DEV_MODE else "production"
     }
 
 

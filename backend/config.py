@@ -5,6 +5,7 @@ from pathlib import Path
 # Environment Variables
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_V1_PREFIX = "/api/v1"
 
 
 class Environment:
@@ -47,12 +48,10 @@ class FilePaths:
 
 
 class APIEndpoints:
-    """API endpoint paths."""
-    PORTFOLIO_CALCULATE = "/portfolio/calculate"
-    PORTFOLIO_REFRESH = "/portfolio/refresh"
-    DB_REFRESH = "/db/refresh"
-    DB_INITIAL_LOAD = "/db/initial-db-load"
-    TRANSACTIONS_ALL = "/transactions/all"
+    """API endpoint paths (with /api/v1 prefix)."""
+    PORTFOLIO_CALCULATE = f"{API_V1_PREFIX}/portfolio/calculate"
+    PORTFOLIO_REFRESH = f"{API_V1_PREFIX}/portfolio/refresh"
+    TRANSACTIONS_ALL = f"{API_V1_PREFIX}/transactions/"
 
     @staticmethod
     def build_url(endpoint: str, base_url: str = None) -> str:

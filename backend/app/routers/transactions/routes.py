@@ -8,7 +8,7 @@ from backend.app.core.exceptions import TransactionNotFoundError
 from .schemas import TransactionResponse, TransactionFilter, TransactionStats
 from .services import transaction_service
 
-router = APIRouter()
+router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
 
 @router.get(

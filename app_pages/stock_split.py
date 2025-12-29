@@ -4,7 +4,7 @@ import os
 import yfinance as yf
 from datetime import datetime
 from backend.utils.api import post_api_request
-from backend.config import API_BASE_URL, FilePaths, ColumnMappings
+from backend.config import APIEndpoints, FilePaths, ColumnMappings
 
 # Config
 st.set_page_config(page_title="Stock Split Calculator", page_icon=":bar_chart:", layout="centered")
@@ -13,7 +13,7 @@ st.set_page_config(page_title="Stock Split Calculator", page_icon=":bar_chart:",
 def trigger_portfolio_calculation():
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return post_api_request(
-        f"{API_BASE_URL}/portfolio/calculate",
+        APIEndpoints.build_url(APIEndpoints.PORTFOLIO_CALCULATE),
         success_message=f"Portfolio calculation triggered! (Last update: {ts})"
     )
 

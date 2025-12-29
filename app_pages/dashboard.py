@@ -7,7 +7,7 @@ import requests
 import streamlit as st
 import time
 
-from backend.config import Directories, API_BASE_URL, ColumnMappings, FilePaths
+from backend.config import Directories, API_BASE_URL, APIEndpoints, ColumnMappings, FilePaths
 from backend.utils.api import post_api_request
 from backend.utils.logger import app_logger
 from backend.services.transactions import get_transactions
@@ -41,21 +41,11 @@ def cached_files_exist():
 def trigger_portfolio_calculation():
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return post_api_request(
-        f"{API_BASE_URL}/portfolio/calculate"
+        APIEndpoints.build_url(APIEndpoints.PORTFOLIO_CALCULATE)
     )
 
 
-def trigger_db_refresh():
-    return post_api_request(
-        f"{API_BASE_URL}/db/refresh",
-        success_message="Database refresh triggered successfully."
-    )
 
-
-def initial_db_load():
-    return post_api_request(
-        f"{API_BASE_URL}/db/initial-db-load"
-    )
 
 
 ############ APP ############
@@ -195,8 +185,6 @@ def refresh_data(uploaded_file=None):
 
     # Trigger the backend API to refresh data
     try:
-        # Check if initial db load is needed
-        initial_db_load()
         trigger_portfolio_calculation()
 
     except Exception as e:
@@ -250,7 +238,7 @@ if not st.session_state.startup_refresh:
 
     if cached_files_exist():
         try:
-            response = requests.post(f"{API_BASE_URL}/portfolio/refresh")
+            response = requests.post(APIEndpoints.build_url(APIEndpoints.PORTFOLIO_REFRESH))
             response.raise_for_status()  # Catching eventual errors
             st.toast("Data refreshed successfully.")
         except requests.exceptions.RequestException as e:
