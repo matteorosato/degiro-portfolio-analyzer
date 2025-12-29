@@ -15,14 +15,16 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     
     # CORS Settings
-    CORS_ORIGINS: str = "*"
+    cors_origins_raw: str = "*"
     
     model_config = {"env_file": ".env", "case_sensitive": True}
     
     @property
-    def cors_origins_list(self) -> List[str]:
-        """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+    def CORS_ORIGINS(self) -> List[str]:
+        """Parse CORS origins from comma-separated string to list."""
+        if isinstance(self.cors_origins_raw, list):
+            return self.cors_origins_raw
+        return [origin.strip() for origin in self.cors_origins_raw.split(",")]
 
 
 settings = Settings()
@@ -34,6 +36,7 @@ class AppConfig:
     # API Info
     PROJECT_NAME: str = "Portfolio Analyzer API"
     VERSION: str = "1.0.0"
+    API_VERSION: str = "1.0.0"  # Alias for VERSION
     API_V1_PREFIX: str = "/api/v1"
     DESCRIPTION: str = "API to manage and calculate portfolio data"
     
@@ -50,12 +53,12 @@ class AppConfig:
     STOCK_PRICES: str = "output/stock_prices.parquet"
     APP_LOG: str = "logs/app.log"
     SCHEDULER_LOG: str = "logs/scheduler.log"
-    
-    @classmethod
-    def ensure_directories(cls):
-        """Create required directories if they don't exist."""
-        for dir_path in [cls.OUTPUT_DIR, cls.LOGS_DIR, cls.UPLOADS_DIR]:
-            Path(dir_path).mkdir(parents=True, exist_ok=True)
 
 
 config = AppConfig()
+
+
+def ensure_directories():
+    """Create required directories if they don't exist."""
+    for dir_path in [config.OUTPUT_DIR, config.LOGS_DIR, config.UPLOADS_DIR]:
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
