@@ -13,23 +13,32 @@ TRANSACTION_FILE = FilePaths.TRANSACTION_CSV
 MAPPING_FILE = FilePaths.ISIN_MAPPING
 
 
-def get_yahoo_product(isin: str, exchange: str = "") -> dict:
-    results_by_isin = yf.Search(isin, max_results=1)
+def get_yahoo_product(isin: str, exchange: str = None) -> dict:
+    """
+    Retrieves product information from Yahoo Finance using an ISIN code.
 
+    The function works as follows:
+    1. Uses the ISIN to search for the product and retrieve its full name ('longname')
+    2. Performs a second search using the product's longname to find all matching products across exchanges
+    3. If a desired exchange is provided, attempts to find and return the product from that specific exchange
+    4. Returns an empty dictionary if no results are found at any step or if no exchange is provided
+
+    """
+    results_by_isin = yf.Search(isin, max_results=1)
     if not results_by_isin.quotes:
         return {}
 
     product_long_name = results_by_isin.quotes[0]['longname']
-    results_by_product_name = yf.Search(product_long_name, max_results=10)
+    results_by_product_name = yf.Search(product_long_name, max_results=20)
+    if not results_by_product_name.quotes or not exchange:
+        return {}
 
-    # If an exchange is provided, attempt to find the product from matching exchanges
-    if exchange:
-        for quote in results_by_product_name.quotes:
-            if quote.get('exchange') == exchange:
-                return quote
+    # Search for the product with the desired exchange
+    for quote in results_by_product_name.quotes:
+        if quote.get('exchange') == exchange:
+            return quote
 
-    # If no exchange match is found, or no exchange is provided, return the first product in the list
-    return results_by_product_name.quotes[0]
+    return {}
 
 
 
@@ -44,30 +53,32 @@ def update_isin_mapping_json(df: pd.DataFrame):
         return None
 
     # Load existing mapping or initialize an empty one
-    existing_mapping = {}
-    if os.path.exists(MAPPING_FILE):
+    try:
         with open(MAPPING_FILE, 'r') as f:
             existing_mapping = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        existing_mapping = {}
     
     # Find unique ISINs from the transaction data
     isin_list = df[['ISIN', 'Product_Name_DeGiro', 'Exchange']].drop_duplicates()
     isin_list = isin_list[isin_list['ISIN'].notna() & (isin_list['ISIN'].astype(str).str.strip() != "")]
 
     # Exchange mapping from Degiro to Yahoo Finance
-    exchange_mapping = {
+    # TODO move this to constants
+    degiro_2_yf_mapping = {
         "EAM": "AMS",
         "XET": "GER",
         "MIL": "MIL",
         "LSE": "LSE",
         "NDQ": "NYQ",
+        "NSY": "SWX",
         # "TDG": "XET",
-        # "NSY": "SWX",
         # "EPA": "PAR",
     }
 
     # Add new ISINs to the mapping without overwriting existing entries
     for isin, name, exchange in isin_list.values:
-        product = get_yahoo_product(isin=isin, exchange=exchange_mapping.get(exchange))
+        product = get_yahoo_product(isin=isin, exchange=degiro_2_yf_mapping.get(exchange))
         if isin not in existing_mapping:
             app_logger.info(f"[ISIN-MAPPING] Adding new ISIN mapping: {isin} -> {name}")
             existing_mapping[isin] = {
