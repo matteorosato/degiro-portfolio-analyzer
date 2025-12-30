@@ -32,7 +32,7 @@ class TestTransactionService:
             'Action': ['BUY', 'SELL'],
             'Quantity': [10.0, 5.0],
             'Price': [150.0, 380.0],
-            'Currency': ['USD', 'USD'],
+            'Price_Currency': ['USD', 'USD'],
             'Cost': [1500.0, 1900.0],
             'Transaction_costs': [1.0, 1.5],
             'Product': ['Apple Inc.', 'Microsoft Corp.'],

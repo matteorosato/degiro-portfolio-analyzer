@@ -152,59 +152,52 @@ class TransactionService:
         
         Returns:
             Raw transaction data with standardized column names
+            
+        Raises:
+            FileNotFoundError: If transaction CSV file does not exist
         """
         if not self.csv_path.exists():
-            app_logger.warning(f"[TRANSACTIONS] File not found: {self.csv_path}")
-            return pd.DataFrame()
+            error_msg = f"Transaction CSV file not found: {self.csv_path}"
+            app_logger.error(f"[TRANSACTIONS] {error_msg}")
+            raise FileNotFoundError(error_msg)
         
         try:
-            df = pd.read_csv(self.csv_path)
+            # Read CSV with specific columns by index
+            # CSV structure:
+            #  0: Date
+            #  1: Time
+            #  2: Product
+            #  3: ISIN
+            #  4: Reference exchange
+            #  5: Venue (skipped)
+            #  6: Quantity
+            #  7: Price
+            #  8: Price_Currency (empty column)
+            #  9: Local_Value
+            # 10: Local_Value_Currency (empty column)
+            # 11: Value_EUR
+            # 12: Exchange_Rate
+            # 13: AutoFX Fee (skipped)
+            # 14: Transaction_Costs_EUR
+            # 15: Total_EUR
+            # 16: Order_ID (skipped)
             
-            # Columns: Date,Time,Product,ISIN,Reference exchange,Venue,Quantity,Price,Price Currency,
-            #          Local value,Local value currency,Value EUR,Exchange rate,AutoFX Fee,
-            #          Transaction and/or third party fees EUR,Total EUR,Order ID,
-            # Note: Price_Currency and Local_Value_Currency contain the currency for that ISIN (EUR, USD, etc.)
-            #       Exchange_Rate is empty for EUR transactions, filled for other currencies
-            column_names = {
-                0: 'Date',
-                1: 'Time',
-                2: 'Product',
-                3: 'ISIN',
-                4: 'Reference_Exchange',
-                6: 'Quantity',
-                7: 'Price',
-                8: 'Price_Currency',
-                9: 'Local_Value',
-                10: 'Local_Value_Currency',
-                11: 'Value_EUR',
-                12: 'Exchange_Rate',
-                14: 'Transaction_Costs_EUR',
-                15: 'Total_EUR'
-            }
+            usecols = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15]
+            column_names = [
+                'Date', 'Time', 'Product_Name_DeGiro', 'ISIN', 'Exchange',
+                'Quantity', 'Price', 'Price_Currency', 'Local_Value', 'Local_Value_Currency',
+                'Value', 'Exchange_Rate', 'Transaction_Costs', 'Total'
+            ]
             
-            # Apply column mapping
-            column_indices = list(column_names.keys())
-            df = df.iloc[:, column_indices]
-            df.columns = list(column_names.values())
-            
-            # Rename for mapping consistency
-            df.rename(
-                columns={
-                    "Product": "Product_Name_DeGiro",
-                    "Reference_Exchange": "Exchange",
-                    "Price_Currency": "Currency",
-                    "Value_EUR": "Value",
-                    "Transaction_Costs_EUR": "Transaction_Costs",
-                    "Total_EUR": "Total",
-                },
-                inplace=True
-            )
+            df = pd.read_csv(self.csv_path, usecols=usecols, header=0)
+            df.columns = column_names
             
             return df
-            
+        
         except Exception as e:
-            app_logger.error(f"[TRANSACTIONS] Error loading CSV: {e}", exc_info=True)
-            return pd.DataFrame()
+            error_msg = f"Error loading CSV: {e}"
+            app_logger.error(f"[TRANSACTIONS] {error_msg}", exc_info=True)
+            raise
     
     def _map_isin(self, df: pd.DataFrame) -> pd.DataFrame:
         """

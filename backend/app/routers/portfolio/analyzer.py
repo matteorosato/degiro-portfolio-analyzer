@@ -249,7 +249,7 @@ class PortfolioAnalyzer:
         
         # Performance percentages
         current_performance_percentage = (
-            ((current_return) / purchase_cost) * 100 
+            (current_return / purchase_cost) * 100
             if (current_return and purchase_cost) else 0
         )
         net_performance_percentage = (

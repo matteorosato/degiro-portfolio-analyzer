@@ -65,7 +65,7 @@ def validate_transaction_data(transaction: dict) -> tuple[bool, str]:
         Tuple of (is_valid, error_message)
     """
     # Check required fields
-    required_fields = ['ISIN', 'Quantity', 'Price', 'Currency', 'Action']
+    required_fields = ['ISIN', 'Quantity', 'Price', 'Price_Currency', 'Action']
     for field in required_fields:
         if field not in transaction or transaction[field] is None:
             return False, f"Missing required field: {field}"
@@ -82,7 +82,7 @@ def validate_transaction_data(transaction: dict) -> tuple[bool, str]:
         return False, "Price must be positive"
     
     # Validate currency
-    if not validate_currency(transaction['Currency']):
-        return False, f"Invalid currency: {transaction['Currency']}"
+    if not validate_currency(transaction['Price_Currency']):
+        return False, f"Invalid currency: {transaction['Price_Currency']}"
     
     return True, ""

@@ -85,8 +85,8 @@ class PortfolioService:
         
             # Update stock prices to EUR
             # Remove duplicates and create ticker-to-currency dict
-            ticker_currency_dict = transactions.drop_duplicates(subset=['Stock', 'Currency'])\
-                                            .set_index('Stock')['Currency'].to_dict()
+            ticker_currency_dict = transactions.drop_duplicates(subset=['Stock', 'Price_Currency'])\
+                                            .set_index('Stock')['Price_Currency'].to_dict()
 
             # Group tickers by currency (excluding EUR)
             currency_ticker_map = {}
