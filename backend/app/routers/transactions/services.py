@@ -171,21 +171,21 @@ class TransactionService:
             #  5: Venue (skipped)
             #  6: Quantity
             #  7: Price
-            #  8: Price_Currency (empty column)
+            #  8: Price_Currency (empty, skipped)
             #  9: Local_Value
-            # 10: Local_Value_Currency (empty column)
+            # 10: Local_Value_Currency (empty, skipped)
             # 11: Value_EUR
-            # 12: Exchange_Rate
-            # 13: AutoFX Fee (skipped)
+            # 13: Exchange_Rate
+            # 13: AutoFX_Fee (skipped)
             # 14: Transaction_Costs_EUR
             # 15: Total_EUR
             # 16: Order_ID (skipped)
             
-            usecols = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15]
+            usecols = [0, 1, 2, 3, 4, 6, 7, 9, 11, 13, 14, 15]
             column_names = [
                 'Date', 'Time', 'Product_Name_DeGiro', 'ISIN', 'Exchange',
-                'Quantity', 'Price', 'Price_Currency', 'Local_Value', 'Local_Value_Currency',
-                'Value', 'Exchange_Rate', 'Transaction_Costs', 'Total'
+                'Quantity', 'Price', 'Local_Value', 'Value', 'Exchange_Rate',
+                'Transaction_Costs', 'Total'
             ]
             
             df = pd.read_csv(self.csv_path, usecols=usecols, header=0, sep=",")
@@ -241,10 +241,10 @@ class TransactionService:
     def _update_isin_mapping(self, df: pd.DataFrame) -> Dict:
         """
         Update ISIN to ticker mapping JSON file.
-        
+
         Args:
             df: Transaction DataFrame
-            
+
         Returns:
             Updated mapping dictionary
         """
@@ -252,45 +252,12 @@ class TransactionService:
         if not required_cols.issubset(df.columns):
             app_logger.warning("[ISIN-MAPPING] Required columns missing")
             return {}
-        
-        # Load existing mapping
-        try:
-            if self.mapping_path.exists():
-                with open(self.mapping_path, 'r') as f:
-                    existing_mapping = json.load(f)
-            else:
-                existing_mapping = {}
-        except (FileNotFoundError, json.JSONDecodeError):
-            existing_mapping = {}
-        
-        # Find unique ISINs
-        isin_list = df[['ISIN', 'Product_Name_DeGiro', 'Exchange']].drop_duplicates()
-        isin_list = isin_list[
-            isin_list['ISIN'].notna() & (isin_list['ISIN'].astype(str).str.strip() != "")
-        ]
-        
-        # Add new ISINs
-        for isin, name, exchange in isin_list.values:
-            if isin not in existing_mapping:
-                try:
-                    product = self._get_yahoo_product(
-                        isin=isin,
-                        exchange=self.degiro_to_yf_exchange.get(exchange)
-                    )
-                except Exception:
-                    product = {}
-                
-                app_logger.info(f"[ISIN-MAPPING] Adding {isin} -> {name}")
-                existing_mapping[isin] = {
-                    "ticker": product.get("symbol", ""),
-                    "degiro_name": name,
-                    "display_name": product.get("shortname", name),
-                    "exchange": exchange,
-                    "product_type": product.get("quoteType", "")
-                }
-        
+
+        # Load existing mapping from file
+        existing_mapping = self._load_existing_mapping()
+
         # Ensure FULL_PORTFOLIO entry exists
-        if "FULL_PORTFOLIO" not in existing_mapping:
+        if "FULL_PORTFOLIO" not in existing_mapping.keys():
             existing_mapping["FULL_PORTFOLIO"] = {
                 "ticker": "FULL",
                 "degiro_name": "Full portfolio",
@@ -298,13 +265,82 @@ class TransactionService:
                 "exchange": "",
                 "product_type": ""
             }
-        
-        # Save updated mapping
-        self.mapping_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.mapping_path, 'w') as f:
-            json.dump(existing_mapping, f, indent=4)
-        
+
+        # Get unique ISINs with validation
+        valid_isins_df = self._get_valid_isins(df)
+
+        if valid_isins_df.empty:
+            app_logger.info("[ISIN-MAPPING] No valid ISINs to process")
+            return existing_mapping
+
+        # Process new ISINs
+        new_isins_count = self._process_new_isins(valid_isins_df, existing_mapping)
+
+        # Save only if there were changes
+        if new_isins_count > 0:
+            self._save_mapping_file(existing_mapping)
+            app_logger.info(f"[ISIN-MAPPING] Added {new_isins_count} new ISIN mappings")
+
         return existing_mapping
+
+    def _load_existing_mapping(self) -> Dict:
+        """Load existing ISIN mapping."""
+        try:
+            if self.mapping_path.exists():
+                with open(self.mapping_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            app_logger.warning(f"[ISIN-MAPPING] Error loading existing mapping: {e}")
+        return {}
+
+    def _get_valid_isins(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Extract and validate unique ISINs from DataFrame."""
+        valid_isins_df = df[['ISIN', 'Product_Name_DeGiro', 'Exchange']].drop_duplicates()
+
+        # Filter valid ISINs: not null, not empty after stripping whitespace
+        valid_mask = (
+            valid_isins_df['ISIN'].notna() &
+            (valid_isins_df['ISIN'].astype(str).str.strip() != "")
+        )
+        return valid_isins_df[valid_mask]
+
+    def _process_new_isins(self, valid_isins_df: pd.DataFrame, existing_mapping: Dict) -> int:
+        """Process new ISINs and add them to mapping. Returns count of new ISINs added."""
+        existing_isins = set(existing_mapping.keys())
+        new_isins_count = 0
+
+        for isin, name, exchange in valid_isins_df.values:
+            if isin not in existing_isins:
+                try:
+                    product = self._get_yahoo_product(
+                        isin=isin,
+                        exchange=self.degiro_to_yf_exchange.get(exchange)
+                    )
+                except Exception as e:
+                    app_logger.warning(f"[ISIN-MAPPING] Failed to get product info for {isin}: {e}")
+                    product = {}
+
+                app_logger.info(f"[ISIN-MAPPING] Adding {isin} -> {name}")
+                existing_mapping[isin] = {
+                    "ticker": product.get("symbol", ""),
+                    "degiro_name": name,
+                    "display_name": product.get("shortname", name),
+                    "exchange": str(exchange),
+                    "product_type": product.get("quoteType", "")
+                }
+                new_isins_count += 1
+
+        return new_isins_count
+
+    def _save_mapping_file(self, mapping: Dict) -> None:
+        """Save mapping to file with proper error handling."""
+        try:
+            self.mapping_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(mapping, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            app_logger.error(f"[ISIN-MAPPING] Failed to save mapping file: {e}")
+            raise
     
     def _get_yahoo_product(self, isin: str, exchange: Optional[str] = None) -> dict:
         """
@@ -350,18 +386,25 @@ class TransactionService:
             return df
         
         try:
+            app_logger.info("[TRANSACTIONS] Starting data preparation...")
+            
             # Parse dates and times first
+            app_logger.info("[TRANSACTIONS] Parsing dates...")
             df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
             df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
 
+            app_logger.info("[TRANSACTIONS] Converting Quantity to int...")
             df['Quantity'] = df['Quantity'].fillna(0).astype(int)
             
             # Determine action (BUY/SELL)
+            app_logger.info("[TRANSACTIONS] Determining actions...")
             df['Action'] = df['Quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
             
             # Convert numeric columns (handle both dot and comma decimal separators)
-            float_columns = ['Price', 'Local_Value', 'Value', 'Transaction_Costs', 'Total']
+            app_logger.info("[TRANSACTIONS] Converting float columns...")
+            float_columns = ['Price', 'Local_Value', 'Value', 'Exchange_Rate', 'Transaction_Costs', 'Total']
             for col in float_columns:
+                app_logger.info(f"[TRANSACTIONS] Converting column {col}...")
                 df[col] = (
                     df[col]
                     .fillna("0")
@@ -371,8 +414,10 @@ class TransactionService:
                 )
             
             # Sort chronologically
+            app_logger.info("[TRANSACTIONS] Sorting data...")
             df = df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
             
+            app_logger.info(f"[TRANSACTIONS] Data preparation completed successfully with {len(df)} rows")
             return df
             
         except Exception as e:
@@ -385,6 +430,7 @@ transaction_service = TransactionService()
 
 
 # Convenience function for backward compatibility
+# TODO : Remove in future refactor
 def get_transactions() -> pd.DataFrame:
     """Get all transactions (backward compatible with old code)."""
     return transaction_service.get_all_transactions()
