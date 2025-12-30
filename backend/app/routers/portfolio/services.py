@@ -8,7 +8,7 @@ import time
 from backend.app.shared.logger import app_logger
 from backend.app.routers.transactions.services import transaction_service
 from backend.app.routers.portfolio.analyzer import PortfolioAnalyzer
-from backend.app.core.config import config
+from backend.app.config import config
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 

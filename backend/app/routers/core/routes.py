@@ -1,7 +1,7 @@
 """Core infrastructure routes - health checks, debugging, and logs."""
 from fastapi import APIRouter, HTTPException
 from typing import List
-from backend.app.core.config import settings, config
+from backend.app.config import settings, config
 from backend.app.shared.logger import app_logger
 from backend.app.shared.scheduler import scheduled_portfolio_job
 

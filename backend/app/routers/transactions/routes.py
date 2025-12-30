@@ -1,14 +1,85 @@
 """FastAPI routes for transactions domain."""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from typing import List, Optional
 from datetime import date
+import shutil
 
 from backend.app.shared.logger import app_logger
 from backend.app.core.exceptions import TransactionNotFoundError
+from backend.app.config import FilePaths, Directories
 from .schemas import TransactionResponse, TransactionFilter, TransactionStats
 from .services import transaction_service
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+@router.post(
+    "/upload",
+    summary="Upload Transactions CSV",
+    description="Upload a DeGiro transactions CSV file for processing"
+)
+async def upload_transactions_csv(file: UploadFile = File(...)):
+    """
+    Upload and save transactions CSV file.
+    
+    The file will be saved to the configured input directory and will
+    replace any existing transactions file.
+    
+    Args:
+        file: The CSV file to upload (multipart/form-data)
+    
+    Returns:
+        Success message with file info
+    """
+    try:
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file type. Only CSV files are allowed."
+            )
+        
+        # Ensure input directory exists
+        Directories.ensure_exists(Directories.INPUT)
+        
+        # Save the uploaded file
+        file_path = FilePaths.TRANSACTION_CSV
+        with open(file_path, 'wb') as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        app_logger.info(f"[TRANSACTIONS-API] CSV file uploaded successfully: {file.filename}")
+        
+        # Process the uploaded file
+        df = transaction_service.get_all_transactions()
+        
+        app_logger.info(f"[TRANSACTIONS-API] Processing {len(df)} transactions...")
+        
+        # Calculate portfolio with the new transactions
+        try:
+            from backend.app.routers.portfolio.services import portfolio_service
+            portfolio_service.calc_portfolio()
+            app_logger.info("[TRANSACTIONS-API] Portfolio calculation completed successfully")
+            calculation_status = "success"
+        except Exception as calc_error:
+            app_logger.error(f"[TRANSACTIONS-API] Portfolio calculation failed: {calc_error}", exc_info=True)
+            calculation_status = "failed"
+        
+        return {
+            "status": "success",
+            "message": f"File '{file.filename}' uploaded and processed successfully",
+            "file_path": file_path,
+            "processed_transactions": len(df),
+            "portfolio_calculation": calculation_status
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        app_logger.error(f"[TRANSACTIONS-API] Error uploading file: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file: {str(e)}"
+        )
 
 
 @router.get(

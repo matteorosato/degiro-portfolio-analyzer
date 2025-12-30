@@ -1,5 +1,10 @@
 """Portfolio domain routes."""
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import JSONResponse
+import pandas as pd
+import json
+import os
+
 from backend.app.routers.portfolio.schemas import (
     CalculationResponse,
     RefreshStatusResponse
@@ -9,6 +14,7 @@ from backend.app.routers.portfolio.tasks import background_refresh_task
 from backend.app.shared.logger import app_logger
 from backend.app.shared.refresh_status import get_refresh_status, is_refresh_running
 from backend.app.core.exceptions import RefreshInProgressError, PortfolioCalculationError
+from backend.app.config import FilePaths
 
 router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
@@ -90,3 +96,124 @@ async def get_refresh_status_route():
         completed_at=state.completed_at.isoformat() if state.completed_at else None,
         error_message=state.error_message
     )
+
+
+@router.get("/daily")
+async def get_portfolio_daily():
+    """Get daily portfolio performance data.
+    
+    Returns the processed daily portfolio performance data as JSON.
+    This includes positions, performance metrics, and historical values.
+    
+    Returns:
+        JSON array of daily portfolio records
+        
+    Raises:
+        HTTPException: If portfolio data file doesn't exist or can't be read
+    """
+    try:
+        if not os.path.exists(FilePaths.PORTFOLIO_DAILY):
+            raise HTTPException(
+                status_code=404,
+                detail="Portfolio daily data not found. Run calculation first."
+            )
+        
+        df = pd.read_parquet(FilePaths.PORTFOLIO_DAILY)
+        
+        # Convert date columns to string for JSON serialization
+        date_columns = df.select_dtypes(include=['datetime64']).columns
+        for col in date_columns:
+            df[col] = df[col].astype(str)
+        
+        data = df.to_dict(orient="records")
+        app_logger.info(f"[API] Returning {len(data)} daily portfolio records")
+        
+        return JSONResponse(content=data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        app_logger.error(f"[API] Error reading daily portfolio: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read portfolio data: {str(e)}"
+        )
+
+
+@router.get("/monthly")
+async def get_portfolio_monthly():
+    """Get monthly portfolio performance data.
+    
+    Returns the processed monthly portfolio performance data as JSON.
+    This provides aggregated monthly views of portfolio performance.
+    
+    Returns:
+        JSON array of monthly portfolio records
+        
+    Raises:
+        HTTPException: If portfolio data file doesn't exist or can't be read
+    """
+    try:
+        if not os.path.exists(FilePaths.PORTFOLIO_MONTHLY):
+            raise HTTPException(
+                status_code=404,
+                detail="Portfolio monthly data not found. Run calculation first."
+            )
+        
+        df = pd.read_parquet(FilePaths.PORTFOLIO_MONTHLY)
+        
+        # Convert date columns to string
+        date_columns = df.select_dtypes(include=['datetime64']).columns
+        for col in date_columns:
+            df[col] = df[col].astype(str)
+        
+        data = df.to_dict(orient="records")
+        app_logger.info(f"[API] Returning {len(data)} monthly portfolio records")
+        
+        return JSONResponse(content=data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        app_logger.error(f"[API] Error reading monthly portfolio: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read portfolio data: {str(e)}"
+        )
+
+
+@router.get("/isin-mapping")
+async def get_isin_mapping():
+    """Get ISIN to ticker mapping data.
+    
+    Returns the mapping between ISIN codes and stock tickers,
+    including product names and other metadata.
+    
+    Returns:
+        JSON object with ISIN mapping data
+        
+    Raises:
+        HTTPException: If mapping file doesn't exist or can't be read
+    """
+    try:
+        if not os.path.exists(FilePaths.ISIN_MAPPING):
+            raise HTTPException(
+                status_code=404,
+                detail="ISIN mapping not found. Upload and process transactions first."
+            )
+        
+        with open(FilePaths.ISIN_MAPPING, 'r', encoding='utf-8') as f:
+            mapping_data = json.load(f)
+        
+        app_logger.info(f"[API] Returning ISIN mapping with {len(mapping_data)} entries")
+        
+        return JSONResponse(content=mapping_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        app_logger.error(f"[API] Error reading ISIN mapping: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read ISIN mapping: {str(e)}"
+        )

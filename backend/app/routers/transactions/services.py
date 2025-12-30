@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, Dict
 import yfinance as yf
 
-from backend.app.core.config import config
+from backend.app.config import config
 from backend.app.shared.logger import app_logger
 from .validators import validate_isin, validate_transaction_data
 
@@ -141,7 +141,7 @@ class TransactionService:
                 "start": df['Date'].min().strftime('%Y-%m-%d'),
                 "end": df['Date'].max().strftime('%Y-%m-%d')
             },
-            "total_invested": float(df[df['Action'] == 'BUY']['Cost'].sum()),
+            "total_invested": float(df[df['Action'] == 'BUY']['Value'].sum()),
             "total_fees": float(df['Transaction_costs'].sum())
         }
     
@@ -171,7 +171,7 @@ class TransactionService:
             #  5: Venue (skipped)
             #  6: Quantity
             #  7: Price
-            #  8: Price_Currency (EUR, skipped)
+            #  8: Price_Currency
             #  9: Local_Value
             # 10: Local_Value_Currency (EUR, skipped)
             # 11: Value
@@ -183,10 +183,10 @@ class TransactionService:
             # 17: Total_Currency (EUR, skipped)
             # 18: Order_ID (skipped)
             
-            usecols = [0, 1, 2, 3, 4, 6, 7, 9, 11, 13, 14, 16]
+            usecols = [0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 13, 14, 16]
             column_names = [
                 'Date', 'Time', 'Product_Name_DeGiro', 'ISIN', 'Exchange',
-                'Quantity', 'Price', 'Local_Value', 'Value', 'Exchange_Rate',
+                'Quantity', 'Price', 'Price_Currency', 'Local_Value', 'Value', 'Exchange_Rate',
                 'Transaction_Costs', 'Total'
             ]
             
@@ -411,7 +411,7 @@ class TransactionService:
                     .str.replace(",", ".")  # Handle comma as decimal separator
                     .astype(float)
                 )
-            
+
             # Sort chronologically
             df = df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
             
@@ -425,10 +425,3 @@ class TransactionService:
 
 # Singleton instance
 transaction_service = TransactionService()
-
-
-# Convenience function for backward compatibility
-# TODO : Remove in future refactor
-def get_transactions() -> pd.DataFrame:
-    """Get all transactions (backward compatible with old code)."""
-    return transaction_service.get_all_transactions()

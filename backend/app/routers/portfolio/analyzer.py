@@ -4,7 +4,7 @@ import yfinance as yf
 from datetime import datetime, date
 import json
 import warnings
-from backend.app.core.config import config
+from backend.app.config import config
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
@@ -187,7 +187,7 @@ class PortfolioAnalyzer:
         if not all_transactions.empty:
             buys = all_transactions[all_transactions['Action'] == 'BUY']
             quantity_bought = buys['Quantity'].sum()
-            avg_cost = -1 * (buys['Cost'].sum() / quantity_bought) if quantity_bought > 0 else 0
+            avg_cost = -1 * (buys['Value'].sum() / quantity_bought) if quantity_bought > 0 else 0
 
         # Initialize variables to track
         realized_return = 0
@@ -201,7 +201,7 @@ class PortfolioAnalyzer:
             row_stock = row["Stock"]
             quantity = row["Quantity"]
             transaction_costs = row['Transaction_costs']
-            transaction_price = abs(row["Cost"]) / abs(row["Quantity"])
+            transaction_price = abs(row["Value"]) / abs(row["Quantity"])
 
             transaction_value = quantity * transaction_price
             
@@ -217,7 +217,7 @@ class PortfolioAnalyzer:
                 if quantity_held > 0:
                     stock_transactions = all_transactions[all_transactions['Stock'] == row_stock]
                     avg_cost_stock = -1 * (
-                        stock_transactions[stock_transactions['Action'].isin(['BUY'])]['Cost'].sum() / 
+                        stock_transactions[stock_transactions['Action'].isin(['BUY'])]['Value'].sum() / 
                         stock_transactions[stock_transactions['Action'].isin(['BUY'])]['Quantity'].sum()
                     )
                     transaction_costs_total += -1 * transaction_costs
