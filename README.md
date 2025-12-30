@@ -2,6 +2,53 @@ Streamlit dashboard displaying analytics of a DeGiro stock portfolio.
 
 ![screenshot_portfolio_dashboard](screenshot_portfolio_dashboard.png)
 
+## Project Structure
+
+This project is organized with clear separation of concerns between frontend and backend:
+
+### **Architecture**
+
+- **Frontend**: [Streamlit](https://streamlit.io/) multipage application following the [cookiecutter-streamlit template](https://github.com/andymcdgeo/cookiecutter-streamlit?tab=readme-ov-file#project-template-structure) structure
+- **Backend**: [FastAPI](https://fastapi.tiangolo.com/) domain-driven architecture inspired by [FastLaunchAPI Guide](https://fastlaunchapi.dev/blog/how-to-structure-fastapi)
+
+### **Project Structure**
+
+```
+degiro-portfolio-analyzer/
+├── streamlit_app/                  # Streamlit frontend
+│   ├── app.py                      # Main entrypoint
+│   ├── pages/                       # Multipage routes (numbered for ordering)
+│   │   ├── 1_Dashboard.py
+│   │   ├── 2_Stock_Split.py
+│   │   ├── 3_Ticker_Mapping.py
+│   │   ├── 4_Analysis.py
+│   │   └── 5_Type_Split.py
+│   ├── src/                         # Frontend modules
+│   │   ├── components/              # Reusable UI components
+│   │   └── calculations/            # Frontend business logic
+│   └── assets/                      # Static assets
+│       ├── css/                     # Custom stylesheets
+│       └── images/                  # Images and icons
+│
+├── backend/                         # FastAPI backend (domain-driven)
+│   ├── app/
+│   │   ├── core/                    # Core configuration
+│   │   ├── shared/                  # Shared utilities
+│   │   └── routers/                 # Domain routers
+│   │       ├── transactions/        # Transaction domain
+│   │       └── portfolio/           # Portfolio domain
+│   └── main.py                      # FastAPI application entrypoint
+│
+├── data/                            # Data files
+├── output/                          # Generated output files
+├── uploads/                         # Uploaded transaction files
+└── logs/                            # Application logs
+```
+
+### **Naming Conventions**
+
+- **Streamlit Pages**: Following [Streamlit's multipage app conventions](https://docs.streamlit.io/get-started/tutorials/create-a-multipage-app) with numbered prefixes for ordering
+
 # Installation
 
 ## Setting Up the Application Locally
@@ -89,19 +136,25 @@ To run the application, follow these steps:
    cd backend
    ```
 
-2. **Start the Flask backend**:  
-   Run the Flask application by executing the following command:
+2. **Start the FastAPI backend**:  
+   Run the FastAPI application by executing the following command:
    ```bash
    python main.py
    ```
 
 3. **Run the Streamlit frontend**:  
-   Open a new terminal window (or tab), navigate back to the project root folder, and run the Streamlit app:
-   ```bash
-   streamlit run app.py
-   ```
+  Open a new terminal window (or tab), navigate to the streamlit_app directory, and run:
+  ```bash
+  streamlit run streamlit_app/app.py
+  ```
 
-   This will launch the Streamlit app, which will communicate with the Flask backend to display the user interface.
+  Or from within the streamlit_app directory:
+  ```bash
+  cd streamlit_app
+  streamlit run app.py
+  ```
+
+  This will launch the Streamlit app, which will communicate with the FastAPI backend to display the user interface.
 
    If you're using **PyCharm**, you can follow the instructions in this [guide](https://discuss.streamlit.io/t/run-streamlit-from-pycharm/21624) to run Streamlit directly from the IDE.
 
