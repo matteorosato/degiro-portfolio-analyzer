@@ -162,26 +162,28 @@ class TransactionService:
         
         try:
             # Read CSV with specific columns by index
-            # CSV structure:
+            # CSV structure (Excel-exported format):
             #  0: Date
             #  1: Time
             #  2: Product
             #  3: ISIN
-            #  4: Reference exchange
+            #  4: Reference (Exchange)
             #  5: Venue (skipped)
             #  6: Quantity
             #  7: Price
-            #  8: Price_Currency (empty, skipped)
+            #  8: Price_Currency (EUR, skipped)
             #  9: Local_Value
-            # 10: Local_Value_Currency (empty, skipped)
-            # 11: Value_EUR
+            # 10: Local_Value_Currency (EUR, skipped)
+            # 11: Value
+            # 12: Value_Currency (EUR, skipped)
             # 13: Exchange_Rate
-            # 13: AutoFX_Fee (skipped)
-            # 14: Transaction_Costs_EUR
-            # 15: Total_EUR
-            # 16: Order_ID (skipped)
+            # 14: Transaction_Costs
+            # 15: Transaction_Costs_Currency (EUR, skipped)
+            # 16: Total
+            # 17: Total_Currency (EUR, skipped)
+            # 18: Order_ID (skipped)
             
-            usecols = [0, 1, 2, 3, 4, 6, 7, 9, 11, 13, 14, 15]
+            usecols = [0, 1, 2, 3, 4, 6, 7, 9, 11, 13, 14, 16]
             column_names = [
                 'Date', 'Time', 'Product_Name_DeGiro', 'ISIN', 'Exchange',
                 'Quantity', 'Price', 'Local_Value', 'Value', 'Exchange_Rate',
@@ -389,22 +391,19 @@ class TransactionService:
             app_logger.info("[TRANSACTIONS] Starting data preparation...")
             
             # Parse dates and times first
-            app_logger.info("[TRANSACTIONS] Parsing dates...")
             df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
             df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
 
-            app_logger.info("[TRANSACTIONS] Converting Quantity to int...")
+            # Ensure correct types
             df['Quantity'] = df['Quantity'].fillna(0).astype(int)
+            df['Exchange'] = df['Exchange'].fillna('').astype(str)
             
             # Determine action (BUY/SELL)
-            app_logger.info("[TRANSACTIONS] Determining actions...")
             df['Action'] = df['Quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
             
             # Convert numeric columns (handle both dot and comma decimal separators)
-            app_logger.info("[TRANSACTIONS] Converting float columns...")
             float_columns = ['Price', 'Local_Value', 'Value', 'Exchange_Rate', 'Transaction_Costs', 'Total']
             for col in float_columns:
-                app_logger.info(f"[TRANSACTIONS] Converting column {col}...")
                 df[col] = (
                     df[col]
                     .fillna("0")
@@ -414,7 +413,6 @@ class TransactionService:
                 )
             
             # Sort chronologically
-            app_logger.info("[TRANSACTIONS] Sorting data...")
             df = df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
             
             app_logger.info(f"[TRANSACTIONS] Data preparation completed successfully with {len(df)} rows")
