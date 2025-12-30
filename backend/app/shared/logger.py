@@ -3,7 +3,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-from backend.app.core.config import config
+from backend.app.config import config
 
 # Ensure logs directory exists
 os.makedirs(config.LOGS_DIR, exist_ok=True)

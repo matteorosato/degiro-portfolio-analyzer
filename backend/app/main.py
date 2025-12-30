@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.core.config import settings, config, ensure_directories
+from backend.app.config import settings, config, ensure_directories
 from backend.app.shared.logger import app_logger
 from backend.app.shared.scheduler import start_scheduled_tasks
 from backend.app.routers.transactions import router as transactions_router
