@@ -160,28 +160,26 @@ class TransactionService:
         try:
             df = pd.read_csv(self.csv_path)
             
-            # New DeGiro CSV format (December 2025)
-            # Columns: Date,Time,Product,ISIN,Reference exchange,Venue,Quantity,Price,,
-            #          Local value,,Value EUR,Exchange rate,AutoFX Fee,
+            # Columns: Date,Time,Product,ISIN,Reference exchange,Venue,Quantity,Price,Price Currency,
+            #          Local value,Local value currency,Value EUR,Exchange rate,AutoFX Fee,
             #          Transaction and/or third party fees EUR,Total EUR,Order ID,
+            # Note: Price_Currency and Local_Value_Currency contain the currency for that ISIN (EUR, USD, etc.)
+            #       Exchange_Rate is empty for EUR transactions, filled for other currencies
             column_names = {
                 0: 'Date',
                 1: 'Time',
                 2: 'Product',
                 3: 'ISIN',
                 4: 'Reference_Exchange',
-                5: 'Venue',
                 6: 'Quantity',
                 7: 'Price',
-                8: 'Price_Currency',  # Empty column in CSV
+                8: 'Price_Currency',
                 9: 'Local_Value',
-                10: 'Local_Value_Currency',  # Empty column in CSV
+                10: 'Local_Value_Currency',
                 11: 'Value_EUR',
                 12: 'Exchange_Rate',
-                13: 'AutoFX_Fee',
                 14: 'Transaction_Costs_EUR',
-                15: 'Total_EUR',
-                16: 'Order_ID'
+                15: 'Total_EUR'
             }
             
             # Apply column mapping
@@ -194,15 +192,13 @@ class TransactionService:
                 columns={
                     "Product": "Product_Name_DeGiro",
                     "Reference_Exchange": "Exchange",
+                    "Price_Currency": "Currency",
                     "Value_EUR": "Value",
                     "Transaction_Costs_EUR": "Transaction_Costs",
                     "Total_EUR": "Total",
                 },
                 inplace=True
             )
-            
-            # Add Currency column (all values are EUR in new format)
-            df['Currency'] = 'EUR'
             
             return df
             

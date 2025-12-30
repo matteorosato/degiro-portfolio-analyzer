@@ -23,20 +23,3 @@ output/
 # IntelliJ IDEA / PyCharm project files
 .idea/
 *.iml
-
-# CSV files (transaction data, test files)
-*.csv
-
-# Documentation files (planning, migration docs)
-AGGIORNAMENTI_PIANO.md
-DOCS_INDEX.md
-ESEMPIO_STRUTTURA_TRANSACTIONS.md
-FLUSSO_CALCOLO_RENDIMENTI.md
-GESTIONE_UPLOAD_TRANSAZIONI.md
-MIGRATION_STEPS.md
-PIANO_RISTRUTTURAZIONE_BACKEND.md
-QUICK_REFERENCE_UPLOAD.md
-STATE_MACHINE_UPLOAD.md
-
-# Python scripts for data processing
-merge_csv.py
