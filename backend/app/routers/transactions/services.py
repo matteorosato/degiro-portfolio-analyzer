@@ -5,7 +5,6 @@ import warnings
 from pathlib import Path
 from typing import Optional, Dict
 import yfinance as yf
-import os
 
 from backend.app.core.config import config
 from backend.app.shared.logger import app_logger
@@ -189,7 +188,7 @@ class TransactionService:
                 'Value', 'Exchange_Rate', 'Transaction_Costs', 'Total'
             ]
             
-            df = pd.read_csv(self.csv_path, usecols=usecols, header=0)
+            df = pd.read_csv(self.csv_path, usecols=usecols, header=0, sep=",")
             df.columns = column_names
             
             return df
@@ -351,45 +350,25 @@ class TransactionService:
             return df
         
         try:
+            # Parse dates and times first
+            df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
+            df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
+
+            df['Quantity'] = df['Quantity'].fillna(0).astype(int)
+            
             # Determine action (BUY/SELL)
             df['Action'] = df['Quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
             
-            # Parse dates and times
-            df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
-            df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
-            
-            # Convert numeric columns (comma as decimal separator)
-            df['Quantity'] = (
-                df['Quantity']
-                .fillna("0")
-                .astype(str)
-                .str.replace(",", ".")
-                .astype(float)
-            )
-            
-            df['Price'] = (
-                df['Price']
-                .fillna("0")
-                .astype(str)
-                .str.replace(",", ".")
-                .astype(float)
-            )
-            
-            df['Cost'] = (
-                df['Value']
-                .fillna("0")
-                .astype(str)
-                .str.replace(",", ".")
-                .astype(float)
-            )
-            
-            df['Transaction_costs'] = (
-                df['Transaction_Costs']
-                .fillna("0")
-                .astype(str)
-                .str.replace(",", ".")
-                .astype(float)
-            )
+            # Convert numeric columns (handle both dot and comma decimal separators)
+            float_columns = ['Price', 'Local_Value', 'Value', 'Transaction_Costs', 'Total']
+            for col in float_columns:
+                df[col] = (
+                    df[col]
+                    .fillna("0")
+                    .astype(str)
+                    .str.replace(",", ".")  # Handle comma as decimal separator
+                    .astype(float)
+                )
             
             # Sort chronologically
             df = df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
