@@ -1,11 +1,10 @@
-import streamlit as st
-import pandas as pd
-import requests
-from datetime import datetime, timedelta
 import plotly.express as px
-import os
-import json
-from config import FrontendConfig, APIEndpoints, ColumnMappings
+import streamlit as st
+
+from src.api.client import fetch_portfolio_daily, fetch_isin_mapping
+from src.data.transformers import prepare_portfolio_dataframe, prepare_mapping_dataframe
+from src.utils.date_helpers import get_date_range
+from src.utils.error_handler import handle_api_error
 
 # Set the page title
 st.set_page_config(page_title="Portfolio Analysis - Split", page_icon="📊", layout="centered")
@@ -14,46 +13,23 @@ st.title("Portfolio Analysis - Split")
 
 # Load portfolio data via API
 try:
-    response = requests.get(
-        FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_DAILY),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    response.raise_for_status()
-    df = pd.DataFrame(response.json())
+    df = fetch_portfolio_daily()
+    df = prepare_portfolio_dataframe(df)
 except Exception as e:
-    st.error(f"Failed to load portfolio data: {e}")
-    st.stop()
+    handle_api_error(e, "Failed to load portfolio data")
 
 # Load ISIN mapping via API
 try:
-    response = requests.get(
-        FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_ISIN_MAPPING),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    response.raise_for_status()
-    mapping = response.json()
+    mapping = fetch_isin_mapping()
+    mapping_df = prepare_mapping_dataframe(mapping)
 except Exception as e:
-    st.error(f"Failed to load ISIN mapping: {e}")
-    st.stop()
+    handle_api_error(e, "Failed to load ISIN mapping")
 
-# Dictionary to rename the performance metrics columns for display purposes
-rename_dict = ColumnMappings.PORTFOLIO_RENAME
-
-if not df.empty and mapping:
-    # Rename columns
-    df = df.rename(columns=rename_dict)
-
-    df['End Date'] = pd.to_datetime(df['End Date'])
+if not df.empty and not mapping_df.empty:
     df = df.sort_values(by='End Date', ascending=True)
 
     # Remove 'Full Portfolio' entry
     df = df[df["Product"] != "Full portfolio"]
-
-    # Flatten the nested dictionary into a DataFrame
-    mapping_df = pd.DataFrame([
-        {"ISIN": isin, "Ticker": data.get("ticker", ""), "Exchange": data.get("exchange", ""), "Product Name (DeGiro)": data.get("degiro_name", ""), "Display Name": data.get("display_name", ""), "Product Type": data.get("product_type", "")}
-        for isin, data in mapping.items()
-        ])
 
     # Join product type from mapping_df to df
     merged_df = df.merge(mapping_df[['Ticker', 'Product Type']], left_on='Ticker', right_on='Ticker', how='left')
@@ -71,49 +47,21 @@ if not df.empty and mapping:
         selection_mode="single",
     )
 
-    # Key date anchors
-    first_day_this_year = max_date.replace(month=1, day=1)
-    first_day_this_month = max_date.replace(day=1)
-
-    # Days since start of this year/month
-    days_since_year_start = (max_date - first_day_this_year).days
-    days_since_month_start = (max_date - first_day_this_month).days
-
-    # Previous month range
-    last_day_prev_month = first_day_this_month - timedelta(days=1)
-    first_day_prev_month = last_day_prev_month.replace(day=1)
-    days_in_last_month = (last_day_prev_month - first_day_prev_month).days + 1
-
-    # Previous year range
-    first_day_prev_year = first_day_this_year.replace(year=max_date.year - 1)
-    last_day_prev_year = first_day_prev_year.replace(month=12, day=31)
-    days_in_last_year = (last_day_prev_year - first_day_prev_year).days + 1
-
-    # Final mapping
-    date_mapping = {
-        "1Y": [365, 0],
-        "3M": [90, 0],
-        "1M": [30, 0],
-        "1W": [7, 0],
-        "1D": [1, 0],
-        "YTD": [days_since_year_start, 0],
-        "Last year": [days_in_last_year+days_since_year_start, days_since_year_start + 1],  # +1 to exclude Jan 1
-        "Last month": [days_in_last_month+days_since_month_start, days_since_month_start + 1],  # +1 to exclude 1st of current month
-        "All time": [(max_date - min_date).days, 0]
-    }
-    
-    selected_start_date = max_date - timedelta(days=date_mapping[date_selection][0])
-    selected_end_date = max_date - timedelta(days=date_mapping[date_selection][1])
+    # Use date helpers for date range calculation
+    selected_start_date, selected_end_date = get_date_range(date_selection, max_date, min_date)
 
     # Filter data by date range
-    filtered_df = merged_df[(merged_df['End Date'] >= selected_start_date) & (merged_df['End Date'] <= selected_end_date)].sort_values(by='End Date')
+    filtered_df = merged_df[
+        (merged_df['End Date'] >= selected_start_date) & (merged_df['End Date'] <= selected_end_date)].sort_values(
+        by='End Date')
 
     # METRIC FILTER
     # Performance metrics
     performance_metrics = ["Net Performance (%)", "Net Return (€)", "Total Cost (€)", "Current Value (€)"]
     default_index_per = performance_metrics.index("Current Value (€)")
-    selected_metric = st.selectbox("Select a Performance Metric", options=performance_metrics, index=default_index_per, key="metric_select", width=250)
-    
+    selected_metric = st.selectbox("Select a Performance Metric", options=performance_metrics, index=default_index_per,
+                                   key="metric_select", width=250)
+
     # Group by Product Type and aggregate Net Return (€) and Total Cost (€)
     split_df = (
         filtered_df.groupby(["End Date", "Product Type"])[["Net Return (€)", "Total Cost (€)", "Current Value (€)"]]
@@ -123,7 +71,8 @@ if not df.empty and mapping:
     )
 
     # Add metrics after grouping
-    split_df["Net Performance (%)"] = (split_df["Net Return (€)"] / split_df["Total Cost (€)"]) * 100 if split_df["Total Cost (€)"].any() else 0
+    split_df["Net Performance (%)"] = (split_df["Net Return (€)"] / split_df["Total Cost (€)"]) * 100 if split_df[
+        "Total Cost (€)"].any() else 0
 
     # Round all columns to 2 decimal places
     split_df = split_df.round({
@@ -187,7 +136,7 @@ if not df.empty and mapping:
     st.plotly_chart(fig, use_container_width=False)
 
     st.divider()
-    
+
     st.subheader(f"{selected_metric} Split by Product Type")
 
     # Filter the latest day only
@@ -223,7 +172,8 @@ if not df.empty and mapping:
         pie_fig.update_layout(height=350, margin=dict(l=0, r=0, t=25, b=0))
         st.plotly_chart(pie_fig, use_container_width=True)
 
-    
+
 else:
-    st.error("Portfolio data not found. Please run the 'dashboard' page first to generate the portfolio performance data.")
+    st.error(
+        "Portfolio data not found. Please run the 'dashboard' page first to generate the portfolio performance data.")
     st.stop()

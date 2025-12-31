@@ -1,90 +1,33 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
-import plotly.express as px
 import requests
 import streamlit as st
 from config import FrontendConfig, APIEndpoints, ColumnMappings
+from src.api.client import (
+    is_backend_alive,
+    portfolio_data_exists,
+    fetch_portfolio_daily,
+    fetch_transactions,
+    trigger_portfolio_calculation,
+    trigger_portfolio_refresh,
+    upload_transactions_file
+)
+from src.components.dashboard_ui import (
+    render_header,
+    render_product_selector,
+    render_metric_selector,
+    render_performance_chart,
+    render_portfolio_summary,
+    render_portfolio_composition
+)
+from src.data.transformers import prepare_portfolio_dataframe
+from src.utils.date_helpers import get_date_range
+from src.utils.error_handler import handle_api_error
+from src.utils.session_state import initialize_session_state
 
 # Config
 st.set_page_config(page_title="Portfolio Dashboard", page_icon=":bar_chart:", layout="centered")
-
-
-def is_backend_alive():
-    try:
-        response = requests.get(FrontendConfig.API_BASE_URL, timeout=2)
-        response.raise_for_status()
-        return True
-    except requests.RequestException:
-        return False
-
-
-def portfolio_data_exists():
-    """Check if portfolio data is available via API."""
-    try:
-        response = requests.get(
-            FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_DAILY),
-            timeout=5
-        )
-        return response.status_code == 200
-    except:
-        return False
-
-
-# Backend triggers
-def trigger_portfolio_calculation():
-    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    response = requests.post(
-        FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_CALCULATE),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    response.raise_for_status()
-    return response.json()
-
-
-def upload_csv_file(uploaded_file):
-    """Upload CSV file to backend via API."""
-    try:
-        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-        response = requests.post(
-            FrontendConfig.get_api_url(APIEndpoints.TRANSACTIONS_UPLOAD),
-            files=files,
-            timeout=FrontendConfig.API_TIMEOUT
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        st.error(f"Failed to upload file: {e}")
-        return None
-
-
-def get_portfolio_daily():
-    """Fetch daily portfolio data from API."""
-    try:
-        response = requests.get(
-            FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_DAILY),
-            timeout=FrontendConfig.API_TIMEOUT
-        )
-        response.raise_for_status()
-        return pd.DataFrame(response.json())
-    except requests.RequestException as e:
-        st.error(f"Failed to fetch portfolio data: {e}")
-        return pd.DataFrame()
-
-
-def get_isin_mapping():
-    """Fetch ISIN mapping from API."""
-    try:
-        response = requests.get(
-            FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_ISIN_MAPPING),
-            timeout=FrontendConfig.API_TIMEOUT
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        st.error(f"Failed to fetch ISIN mapping: {e}")
-        return {}
-
 
 ############ APP ############
 
@@ -93,7 +36,7 @@ if not is_backend_alive():
     st.error("Backend API is not reachable. Please ensure the backend is running.")
     st.stop()
 
-st.title("Portfolio Dashboard")
+render_header()
 
 # Check if portfolio data exists
 if not portfolio_data_exists():
@@ -107,7 +50,7 @@ if not portfolio_data_exists():
 
     if uploaded_file:
         with st.spinner("Uploading and processing file..."):
-            result = upload_csv_file(uploaded_file)
+            result = upload_transactions_file(uploaded_file)
 
         if result and result.get("status") == "success":
             st.success(f"✅ {result['message']}")
@@ -122,19 +65,15 @@ if not portfolio_data_exists():
 # Placeholder for the loading spinner while refreshing data on startup
 loading_placeholder = st.empty()
 
-# Define startup refresh state variable
-if st.session_state.get("startup_refresh") is None:
-    st.session_state.startup_refresh = False
-if st.session_state.get("pending_file_upload") is None:
-    st.session_state.pending_file_upload = None
-if st.session_state.get("show_upload_confirmation") is None:
-    st.session_state.show_upload_confirmation = False
-if st.session_state.get("upload_count") is None:
-    st.session_state.upload_count = 0
-if st.session_state.get("processing") is None:
-    st.session_state.processing = False
-if st.session_state.get("reset_processing") is None:
-    st.session_state.reset_processing = False
+# Initialize session state
+initialize_session_state({
+    "startup_refresh": False,
+    "pending_file_upload": None,
+    "show_upload_confirmation": False,
+    "upload_count": 0,
+    "processing": False,
+    "reset_processing": False
+})
 
 
 @st.dialog("Confirm Upload")
@@ -157,7 +96,7 @@ def confirm_upload_dialog():
 
     if st.session_state.get("processing"):
         with st.spinner("Processing and recalculating portfolio..."):
-            result = upload_csv_file(st.session_state.pending_file_upload)
+            result = upload_transactions_file(st.session_state.pending_file_upload)
 
         if result and result.get("status") == "success":
             st.success(f"✅ {result['message']}")
@@ -209,19 +148,15 @@ if not st.session_state.startup_refresh:
     if portfolio_data_exists():
         # Portfolio exists -> trigger background refresh
         try:
-            response = requests.post(
-                FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_REFRESH),
-                timeout=FrontendConfig.API_TIMEOUT
-            )
-            response.raise_for_status()
+            trigger_portfolio_refresh()
             st.toast("Data refreshed successfully.")
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             st.error(f"Error during data refreshing process: {e}")
     else:
         # No portfolio data -> Run blocking calculation synchronously
         with st.spinner("Running initial portfolio calculation (this may take some time)..."):
             try:
-                refresh_data()
+                trigger_portfolio_calculation()
                 st.toast("Initial portfolio calculation completed successfully.")
             except Exception as e:
                 st.error(f"Error during portfolio calculation: {e}")
@@ -231,11 +166,12 @@ if not st.session_state.startup_refresh:
 # Clear the placeholder once the data is ready
 loading_placeholder.empty()
 
-# Dictionary to rename the performance metrics columns for display purposes
-rename_dict = ColumnMappings.PORTFOLIO_RENAME
-
 # Fetch portfolio data from API
-df = get_portfolio_daily()
+try:
+    df = fetch_portfolio_daily()
+    df = prepare_portfolio_dataframe(df)
+except Exception as e:
+    handle_api_error(e, "Failed to fetch portfolio data")
 
 if df.empty:
     st.warning("No portfolio data available.")
@@ -245,36 +181,10 @@ if df.empty:
         st.rerun()
     st.stop()
 
-# Rename columns
-df = df.rename(columns=rename_dict)
-
-# Convert dates to datetime format
-df['Start Date'] = pd.to_datetime(df['Start Date'])
-df['End Date'] = pd.to_datetime(df['End Date'])
-
 # Move the file uploader and refresh button to the sidebar
 with st.sidebar:
-    # Sort product options
-    product_options = sorted(df['Product'].unique().tolist())
-    if "Full portfolio" in product_options:
-        product_options.remove("Full portfolio")
-        product_options.insert(0, "Full portfolio")
-
-    # Set default index for "Full Portfolio"
-    default_index = product_options.index("Full portfolio")
-    selected_product = st.selectbox("Select a Product", options=product_options, index=default_index,
-                                    key="product_select")
-
-    # Dropdown to select another product for comparison
-    compare_product_options = ["None"] + product_options
-    selected_compare_product = st.selectbox("Compare with another Product", options=compare_product_options, index=0,
-                                            key="compare_product_select")
-
-    # Performance metrics
-    performance_metrics = [col for col in df.columns if col not in ['Product', 'Ticker', 'Start Date', 'End Date']]
-    default_index_per = performance_metrics.index("Current Value (€)")
-    selected_metric = st.selectbox("Select a Performance Metric", options=performance_metrics, index=default_index_per,
-                                   key="metric_select")
+    selected_product, selected_compare_product = render_product_selector(df)
+    selected_metric = render_metric_selector(df)
 
 # Filter on product
 product_df = df[df['Product'] == selected_product]
@@ -287,18 +197,10 @@ max_date = df['End Date'].max().to_pydatetime()
 
 # Get min_date from the FIRST TRANSACTION via API
 try:
-    response = requests.get(
-        FrontendConfig.get_api_url(APIEndpoints.TRANSACTIONS_ALL),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    response.raise_for_status()
-    transactions_data = response.json()
-
-    if transactions_data:
-        transactions_df = pd.DataFrame(transactions_data)
+    transactions_df = fetch_transactions()
+    if not transactions_df.empty:
         transactions_df['Date'] = pd.to_datetime(transactions_df['Date'])
-        first_transaction_date = transactions_df['Date'].min().to_pydatetime()
-        min_date = first_transaction_date
+        min_date = transactions_df['Date'].min().to_pydatetime()
     else:
         min_date = df['End Date'].min().to_pydatetime()
 except Exception as e:
@@ -313,40 +215,8 @@ date_selection = st.segmented_control(
     selection_mode="single",
 )
 
-# Key date anchors
-first_day_this_year = max_date.replace(month=1, day=1)
-first_day_this_month = max_date.replace(day=1)
-
-# Days since start of this year/month
-days_since_year_start = (max_date - first_day_this_year).days
-days_since_month_start = (max_date - first_day_this_month).days
-
-# Previous month range
-last_day_prev_month = first_day_this_month - timedelta(days=1)
-first_day_prev_month = last_day_prev_month.replace(day=1)
-days_in_last_month = (last_day_prev_month - first_day_prev_month).days + 1
-
-# Previous year range
-first_day_prev_year = first_day_this_year.replace(year=max_date.year - 1)
-last_day_prev_year = first_day_prev_year.replace(month=12, day=31)
-days_in_last_year = (last_day_prev_year - first_day_prev_year).days + 1
-
-# Final mapping
-date_mapping = {
-    "1Y": [365, 0],
-    "3M": [90, 0],
-    "1M": [30, 0],
-    "1W": [7, 0],
-    "1D": [1, 0],
-    "YTD": [days_since_year_start, 0],
-    "Last year": [days_in_last_year + days_since_year_start, days_since_year_start + 1],  # +1 to exclude Jan 1
-    "Last month": [days_in_last_month + days_since_month_start, days_since_month_start + 1],
-    # +1 to exclude 1st of current month
-    "All time": [(max_date - min_date).days, 0]
-}
-
-selected_start_date = max_date - timedelta(days=date_mapping[date_selection][0])
-selected_end_date = max_date - timedelta(days=date_mapping[date_selection][1])
+# Use date helpers for date range calculation
+selected_start_date, selected_end_date = get_date_range(date_selection, max_date, min_date)
 
 # Filter data by date range
 filtered_df = product_df[
@@ -356,143 +226,23 @@ filtered_df = product_df[
 # st.subheader(f"{selected_product}")
 
 # ---- Chart Section ----
+render_performance_chart(
+    filtered_df,
+    selected_metric,
+    selected_product,
+    compare_product_df,
+    selected_compare_product,
+    selected_start_date,
+    selected_end_date
+)
+
+# ---- Portfolio Summary Section ----
 if not filtered_df.empty:
-    st.subheader(f"{selected_metric} for {selected_product}")
-
-    # Plot
-    fig = px.line()
-
-    # Add the first trace (main product)
-    fig.add_scatter(
-        x=filtered_df['End Date'],
-        y=filtered_df[selected_metric],
-        mode='lines',
-        name=f"{selected_product}",
-        line=dict(color="#1f77b4", shape='spline', smoothing=0.7)
-    )
-
-    # Add comparison line if another product is selected
-    if not compare_product_df.empty:
-        compare_filtered_df = compare_product_df[
-            (compare_product_df['End Date'] >= selected_start_date) &
-            (compare_product_df['End Date'] <= selected_end_date)
-            ].sort_values(by='End Date')
-
-        fig.add_scatter(
-            x=compare_filtered_df['End Date'],
-            y=compare_filtered_df[selected_metric],
-            mode='lines',
-            name=f"{selected_compare_product}",
-            line=dict(color='orange', shape='spline', smoothing=0.7)
-        )
-
-        fig.update_layout(
-            showlegend=True,
-            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center", yanchor="bottom")
-        )
-
-    fig.update_layout(width=1200, height=400, margin=dict(l=0, r=0, t=50, b=50))
-    st.plotly_chart(fig, use_container_width=False)
-
-    # ---- Portfolio Summary Section ----
-    # Format the date range for the title
-    period_start_str = selected_start_date.strftime('%Y-%m-%d')
-    period_end_str = selected_end_date.strftime('%Y-%m-%d')
-    st.subheader(f"Portfolio Summary")
-    st.caption(f"Period: {period_start_str} to {period_end_str} "
-               f"({(selected_end_date - selected_start_date).days} days)")
-
-    # Get values at the start and end of the selected period
-    period_start_value = filtered_df.iloc[0].get("Current Value (€)", 0) if len(filtered_df) > 0 else 0
-    period_start_cost = filtered_df.iloc[0].get("Total Cost (€)", 0) if len(filtered_df) > 0 else 0
-
-    period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
-    period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
-
-    # Calculate net cash flows during the period (cost invested in the period)
-    # Total Cost is cumulative, so the difference tells us how much was invested/withdrawn
-    net_cash_flows_period = period_end_cost - period_start_cost
-
-    # Calculate Period Return in € considering cash flows
-    # Period Return = (End Value - Start Value) - Net Cash Invested
-    # This shows the actual gain/loss excluding the effect of new money added
-    period_return_euro = period_end_value - period_start_value - net_cash_flows_period
-
-    # Calculate Period Performance %
-    # Performance % = Period Return / (Start Value + Net Cash Invested) * 100
-    # We use the average capital employed during the period
-    if period_start_value + net_cash_flows_period != 0:
-        period_performance_pct = (period_return_euro / (period_start_value + net_cash_flows_period)) * 100
-    else:
-        period_performance_pct = 0
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        # Portfolio Value: current value at end of period
-        st.metric(
-            label="Portfolio Value",
-            value=f"€ {period_end_value:,.2f}",
-        )
-    with col2:
-        # Period Return: gain/loss in € after accounting for cash flows
-        # Formula: (End Value - Start Value) - Net Cash Invested
-        # Shows the actual profit/loss excluding the effect of new money added
-        st.metric(
-            label="Period Return",
-            value=f"€ {period_return_euro:,.2f}"
-        )
-    with col3:
-        # Period Performance: return as percentage with +/- sign
-        performance_sign = "+" if period_performance_pct >= 0 else ""
-        st.metric(
-            label="Period Performance",
-            value=f"{performance_sign}{period_performance_pct:.2f}%"
-        )
-
+    render_portfolio_summary(filtered_df, selected_start_date, selected_end_date)
     st.divider()
 
     # ---- Portfolio Composition Section ----
-    st.subheader("Portfolio Composition")
-
-    # Get the latest data for all products in the selected period
-    latest_date = filtered_df['End Date'].max()
-    composition_df = df[df['End Date'] == latest_date].copy()
-
-    # Filter out "Full portfolio" from the composition
-    composition_df = composition_df[composition_df['Product'] != 'Full portfolio']
-
-    if not composition_df.empty and len(composition_df) > 0:
-        # Calculate NAV and NAV % for each product
-        composition_df['NAV'] = composition_df['Current Value (€)']
-        total_nav = composition_df['NAV'].sum()
-        composition_df['NAV %'] = (composition_df['NAV'] / total_nav * 100) if total_nav > 0 else 0
-
-        # Prepare data for display
-        composition_display = composition_df[['Product', 'NAV', 'NAV %']].copy()
-        composition_display = composition_display.sort_values('NAV', ascending=False)
-
-        # Display table first
-        st.dataframe(
-            composition_display.style.format({
-                'NAV': '€ {:,.2f}',
-                'NAV %': '{:.2f}%'
-            }),
-            hide_index=True,
-            use_container_width=True
-        )
-
-        # Create pie chart (displayed below the table)
-        fig_pie = px.pie(
-            composition_display,
-            values='NAV',
-            names='Product'
-        )
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig_pie, use_container_width=True)
-    else:
-        st.info("No composition data available. Select 'Full portfolio' to see individual holdings.")
-
+    render_portfolio_composition(df, filtered_df)
     st.divider()
 else:
     st.write("No data available for the selected product and date range.")

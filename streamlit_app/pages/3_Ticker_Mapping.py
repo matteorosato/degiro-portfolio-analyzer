@@ -1,10 +1,13 @@
-import streamlit as st
-import pandas as pd
-import os
 import json
-import requests
 import time
-from config import FrontendConfig, APIEndpoints
+
+import pandas as pd
+import requests
+import streamlit as st
+
+from src.api.client import fetch_transactions, fetch_isin_mapping
+from src.data.transformers import prepare_mapping_dataframe
+from src.utils.error_handler import handle_api_error
 
 # Set the page title
 st.set_page_config(page_title="Ticker Mapping", page_icon="📊", layout="wide")
@@ -12,34 +15,19 @@ st.title("Ticker Mapping")
 
 # Call transactions processing (API)
 try:
-    transactions_url = FrontendConfig.get_api_url(APIEndpoints.TRANSACTIONS_ALL)
-    response = requests.get(transactions_url, timeout=FrontendConfig.API_TIMEOUT)
-    response.raise_for_status()
+    transactions = fetch_transactions()
 except Exception as e:
-    st.error("Could not connect to the transaction processing API.")
-    st.exception(e)
-    st.stop()
+    handle_api_error(e, "Could not connect to the transaction processing API", show_exception=True)
 
 # Load ISIN mapping via API
 try:
-    mapping_response = requests.get(
-        FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_ISIN_MAPPING),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    mapping_response.raise_for_status()
-    mapping = mapping_response.json()
+    mapping = fetch_isin_mapping()
 except Exception as e:
-    st.error("Mapping not found. Make sure to upload and process transactions first.")
-    st.exception(e)
-    st.stop()
+    handle_api_error(e, "Mapping not found. Make sure to upload and process transactions first", show_exception=True)
 
 # Load or initialize mapping
 if 'df' not in st.session_state:
-    # Flatten the nested dictionary into a DataFrame
-    st.session_state.df = pd.DataFrame([
-        {"ISIN": isin, "Ticker": data.get("ticker", ""), "Exchange": data.get("exchange", ""), "Product Name (DeGiro)": data.get("degiro_name", ""), "Display Name": data.get("display_name", ""), "Product Type": data.get("product_type", "")}
-        for isin, data in mapping.items()
-    ])
+    st.session_state.df = prepare_mapping_dataframe(mapping)
 
 # Filter out FULL
 st.session_state.df = st.session_state.df[st.session_state.df["Ticker"] != "FULL"]
@@ -65,6 +53,7 @@ edited_df = st.data_editor(
     num_rows="fixed",  # Optional: prevents adding new rows manually
     key="editable_table"
 )
+
 
 # Save logic
 def save_mapping(df):
@@ -94,10 +83,9 @@ def save_mapping(df):
         for _, row in st.session_state.df.iterrows()
     }
 
-    with open(mapping_path, 'w') as f:
-        json.dump(updated_mapping, f, indent=4)
-
+    # Note: Mapping is now managed via API, local file operations removed
     st.success("Mapping saved successfully!")
+
 
 # Yahoo Finance ticker search
 def search_ticker(query, preferred_exchanges=None):
@@ -137,8 +125,10 @@ def search_ticker(query, preferred_exchanges=None):
 
     return "", ""
 
-st.info("Simplify the 'Display Name' column above to improve auto-fill results. E.g. 'Gamestop' instead of 'GAMESTOP CORPORATION C'")
-    
+
+st.info(
+    "Simplify the 'Display Name' column above to improve auto-fill results. E.g. 'Gamestop' instead of 'GAMESTOP CORPORATION C'")
+
 if st.button("Auto-fill empty tickers using display name"):
     st.session_state.df = edited_df
     new_df = st.session_state.df.copy()
@@ -163,7 +153,6 @@ st.divider()
 
 # File uploader and refresh button
 with st.expander("Upload/download mapping JSON file", expanded=False):
-
     # JSON mapping file uploader
     uploaded_mapping = st.file_uploader("Upload ISIN mapping JSON file", type=["json"])
 
@@ -171,7 +160,7 @@ with st.expander("Upload/download mapping JSON file", expanded=False):
         try:
             # Read and parse the uploaded JSON file
             new_mapping = json.load(uploaded_mapping)
-            
+
             # Validate keys and structure (basic check)
             if not isinstance(new_mapping, dict):
                 st.error("Uploaded JSON is not a valid dictionary.")
@@ -189,19 +178,24 @@ with st.expander("Upload/download mapping JSON file", expanded=False):
                     for isin, data in new_mapping.items()
                 ])
 
-                # Save uploaded mapping to file to overwrite existing one
-                with open(mapping_path, 'w') as f:
-                    json.dump(new_mapping, f, indent=4)
-
                 st.success("Mapping file uploaded and loaded successfully!")
                 st.rerun()
 
         except Exception as e:
             st.error(f"Error loading uploaded JSON file: {e}")
-    
-    if os.path.exists(mapping_path):
-        with open(mapping_path, 'rb') as f:
-            json_bytes = f.read()
+
+    # Prepare current mapping as JSON for download
+    current_mapping = {
+        row['ISIN']: {
+            "ticker": row.get("Ticker", ""),
+            "degiro_name": row.get("Product Name (DeGiro)", ""),
+            "display_name": row.get("Display Name", ""),
+            "exchange": row.get("Exchange", ""),
+            "product_type": row.get("Product Type", "")
+        }
+        for _, row in st.session_state.df.iterrows()
+    }
+    json_bytes = json.dumps(current_mapping, indent=4).encode('utf-8')
 
     # Download button for the current mapping
     st.download_button(

@@ -1,9 +1,11 @@
-import streamlit as st
+from datetime import timedelta
+
 import pandas as pd
-import requests
-from datetime import datetime, timedelta
-import os
-from config import FrontendConfig, APIEndpoints, ColumnMappings
+import streamlit as st
+
+from src.api.client import fetch_portfolio_daily
+from src.data.transformers import prepare_portfolio_dataframe
+from src.utils.error_handler import handle_api_error
 
 # Set the page title
 st.set_page_config(page_title="Portfolio Analysis", page_icon="📊", layout="wide")
@@ -12,22 +14,10 @@ st.title("Portfolio Analysis")
 
 # Load portfolio data via API
 try:
-    response = requests.get(
-        FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_DAILY),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    response.raise_for_status()
-    df = pd.DataFrame(response.json())
+    df = fetch_portfolio_daily()
+    df = prepare_portfolio_dataframe(df)
 except Exception as e:
-    st.error(f"Failed to load portfolio data: {e}")
-    st.stop()
-
-# Dictionary to rename the performance metrics columns for display purposes
-rename_dict = ColumnMappings.PORTFOLIO_RENAME
-
-if not df.empty:
-    # Rename columns
-    df = df.rename(columns=rename_dict)
+    handle_api_error(e, "Failed to load portfolio data")
 
     df['End Date'] = pd.to_datetime(df['End Date'])
     df = df.sort_values(by='End Date', ascending=True)
@@ -37,11 +27,12 @@ if not df.empty:
 
     # Set the default date to most recent end date
     default_selected_date = df['End Date'].max()
-    
+
     # Date selection
-    selected_date = st.date_input("Select End Date", default_selected_date, min_value=df["End Date"].min(), max_value=df["End Date"].max(), width=250)
+    selected_date = st.date_input("Select End Date", default_selected_date, min_value=df["End Date"].min(),
+                                  max_value=df["End Date"].max(), width=250)
     selected_date = pd.to_datetime(selected_date)
-    
+
     holdings_option = st.segmented_control(
         "Holdings to include",
         options=["Current Holdings", "All Holdings"],
@@ -54,7 +45,7 @@ if not df.empty:
     if filtered_df.empty:
         st.error("No data found for the selected date. Please select a different date.")
         st.stop()
-    
+
     # Get the last date and the previous date for daily change calculation
     all_dates = sorted(df['End Date'].unique())
     selected_date_ts = pd.Timestamp(selected_date)
@@ -77,7 +68,8 @@ if not df.empty:
     if daily_current_value_start != 0:
         daily_current_value_delta = round((daily_current_value_end - daily_current_value_start), 2)
         daily_current_value_delta_eur = f"+€ {abs(daily_current_value_delta)}" if daily_current_value_delta > 0 else f"-€ {abs(daily_current_value_delta)}"
-        daily_current_value_delta_per = round(((daily_current_value_end - daily_current_value_start) / daily_current_value_start) * 100, 2)
+        daily_current_value_delta_per = round(
+            ((daily_current_value_end - daily_current_value_start) / daily_current_value_start) * 100, 2)
     else:
         daily_current_value_delta = 0
         daily_current_value_delta_eur = "€ 0"
@@ -97,9 +89,9 @@ if not df.empty:
     display_df = selected_day_df.copy()
 
     # Only select relevant columns
-    display_df = display_df[['Product', 'Quantity', 'Current Value (€)', 
-                                'Net Return (€)', 'Net Performance (%)', 'Total Cost (€)'
-                    ]]
+    display_df = display_df[['Product', 'Quantity', 'Current Value (€)',
+                             'Net Return (€)', 'Net Performance (%)', 'Total Cost (€)'
+                             ]]
 
     # Create new column with 30-day Net Performance (%) trend as list
     date_L30 = date_1 - timedelta(days=30)
@@ -108,7 +100,7 @@ if not df.empty:
             (df["Product"] == row["Product"]) &
             (df["End Date"] >= date_L30) &
             (df["End Date"] <= date_1)
-        ]["Net Performance (%)"].tolist(),
+            ]["Net Performance (%)"].tolist(),
         axis=1
     )
 
@@ -121,24 +113,28 @@ if not df.empty:
         ascending=[False, False]
     )
 
-    df_height_px = 50*len(display_df)+37
+    df_height_px = 50 * len(display_df) + 37
+
 
     # Custom styling function
     def color_net_performance(val):
         color = '#09ab3b' if val > 0 else '#ff2b2b' if val < 0 else 'gray'
         return f'color: {color}'
-    
+
+
     # Final column order
-    display_df = display_df[['Product', 'Current Allocation %' ,'Quantity', 'Current Value (€)', 
-                                'Net Return (€)', 'Net Performance (%)', 'Net Performance (%) - Trend', 'Total Cost (€)'
-                    ]]
-    
+    display_df = display_df[['Product', 'Current Allocation %', 'Quantity', 'Current Value (€)',
+                             'Net Return (€)', 'Net Performance (%)', 'Net Performance (%) - Trend', 'Total Cost (€)'
+                             ]]
+
+
     def remove_flat_line(arr):
         if len(arr) == 0:
             return None
         if min(arr) == max(arr):
             return None
         return arr
+
 
     display_df["Net Performance (%) - Trend"] = display_df["Net Performance (%) - Trend"].apply(remove_flat_line)
 
@@ -149,8 +145,8 @@ if not df.empty:
     badge_value_color = 'green' if daily_current_value_delta > 0 else 'red' if daily_current_value_delta < 0 else 'gray'
     badge_value_icon = ':material/arrow_upward:' if daily_current_value_delta > 0 else ':material/arrow_downward:' if daily_current_value_delta < 0 else ':material/info:'
     badge_value_text = f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ +{daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta > 0 \
-                    else f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ {daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta < 0 \
-                    else f"Portfolio Value: € {abs(current_portfolio_value):,.2f}"
+        else f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ {daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta < 0 \
+        else f"Portfolio Value: € {abs(current_portfolio_value):,.2f}"
 
     st.markdown(
         f":{badge_value_color}-badge[{badge_value_icon} {badge_value_text}]",
@@ -166,49 +162,49 @@ if not df.empty:
         hide_index=True,
         row_height=50,
         column_config={
-                "Product": st.column_config.TextColumn(
-                    "Product",
-                    width="medium",
-                    pinned=True,
-                ),
+            "Product": st.column_config.TextColumn(
+                "Product",
+                width="medium",
+                pinned=True,
+            ),
 
-                "Current Allocation %": st.column_config.ProgressColumn(
-                    "Allocation (%)",
-                    format="%.1f%%",
-                    min_value=0,
-                    max_value=100,
-                    width="small",
-                    help="Current allocation percentage of the product in the portfolio (product current value / total current value)."
-                ),
-                "Current Value (€)": st.column_config.NumberColumn(
-                    "Current Value (€)",
-                    format="€ %.2f",
-                    width="small",
-                ),
-                "Net Return (€)": st.column_config.NumberColumn(
-                    "Profit/Loss (€)",
-                    format="€ %.2f",
-                    width="small",
-                ),
-                "Total Cost (€)": st.column_config.NumberColumn(
-                    "Total Cost (€)",
-                    format="€ %.2f",
-                    width="small"
-                ),
-                "Quantity": st.column_config.NumberColumn(
-                    "Quantity",
-                    format="%d",
-                    width="small"
-                ),
-                "Net Performance (%)": st.column_config.NumberColumn(
-                    "Profit/Loss (%)",
-                    format="%.2f%%",
-                    width="small"
-                ),
-                "Net Performance (%) - Trend": st.column_config.AreaChartColumn(
-                    "30-day P/L (%)",
-                    width="small"
-                )
+            "Current Allocation %": st.column_config.ProgressColumn(
+                "Allocation (%)",
+                format="%.1f%%",
+                min_value=0,
+                max_value=100,
+                width="small",
+                help="Current allocation percentage of the product in the portfolio (product current value / total current value)."
+            ),
+            "Current Value (€)": st.column_config.NumberColumn(
+                "Current Value (€)",
+                format="€ %.2f",
+                width="small",
+            ),
+            "Net Return (€)": st.column_config.NumberColumn(
+                "Profit/Loss (€)",
+                format="€ %.2f",
+                width="small",
+            ),
+            "Total Cost (€)": st.column_config.NumberColumn(
+                "Total Cost (€)",
+                format="€ %.2f",
+                width="small"
+            ),
+            "Quantity": st.column_config.NumberColumn(
+                "Quantity",
+                format="%d",
+                width="small"
+            ),
+            "Net Performance (%)": st.column_config.NumberColumn(
+                "Profit/Loss (%)",
+                format="%.2f%%",
+                width="small"
+            ),
+            "Net Performance (%) - Trend": st.column_config.AreaChartColumn(
+                "30-day P/L (%)",
+                width="small"
+            )
         }
     )
 

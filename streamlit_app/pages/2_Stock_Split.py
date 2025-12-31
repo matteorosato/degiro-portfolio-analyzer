@@ -1,28 +1,29 @@
-import streamlit as st
-import pandas as pd
-import os
-import yfinance as yf
-import requests
 from datetime import datetime
-from config import FrontendConfig, APIEndpoints, ColumnMappings
+
+import pandas as pd
+import streamlit as st
+import yfinance as yf
+
+from src.api.client import fetch_portfolio_daily, trigger_portfolio_calculation
+from src.data.transformers import prepare_portfolio_dataframe
+from src.utils.error_handler import handle_api_error
 
 # Config
 st.set_page_config(page_title="Stock Split Calculator", page_icon=":bar_chart:", layout="centered")
 
+
 # Backend triggers
-def trigger_portfolio_calculation():
+def refresh_data():
+    """Trigger portfolio calculation via API."""
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
-        response = requests.post(
-            FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_CALCULATE),
-            timeout=FrontendConfig.API_TIMEOUT
-        )
-        response.raise_for_status()
+        result = trigger_portfolio_calculation()
         st.success(f"Portfolio calculation triggered! (Last update: {ts})")
-        return response.json()
+        return result
     except Exception as e:
-        st.error(f"Failed to trigger calculation: {e}")
+        handle_api_error(e, "Failed to trigger calculation", stop=False)
         return None
+
 
 st.title('Stock Split Calculator')
 st.subheader('To Invest and Split')
@@ -35,20 +36,22 @@ if 'result_df' not in st.session_state:
 if 'investment_needed' not in st.session_state:
     st.session_state.investment_needed = 0
 
+
 def refresh_data():
     try:
         trigger_portfolio_calculation()
     except Exception as e:
         st.error(f"Error occurred while refreshing data: {e}")
 
+
 @st.cache_data
 def get_current_stock_price(ticker_symbol):
     # Create a Ticker object
     ticker = yf.Ticker(ticker_symbol)
-    
+
     # Retrieve the current stock price
     stock_info = ticker.history(period="1d")
-    
+
     # Extract the last closing price or current price
     if not stock_info.empty:
         current_price = stock_info['Close'].iloc[-1]
@@ -56,18 +59,11 @@ def get_current_stock_price(ticker_symbol):
     else:
         return None
 
-# Dictionary to rename the performance metrics columns for display purposes
-rename_dict = ColumnMappings.PORTFOLIO_RENAME
 
 # Load portfolio data via API
 try:
-    response = requests.get(
-        FrontendConfig.get_api_url(APIEndpoints.PORTFOLIO_DAILY),
-        timeout=FrontendConfig.API_TIMEOUT
-    )
-    response.raise_for_status()
-    daily_df = pd.DataFrame(response.json())
-    daily_df = daily_df.rename(columns=rename_dict)
+    daily_df = fetch_portfolio_daily()
+    daily_df = prepare_portfolio_dataframe(daily_df)
 
     # Get the most recent data
     daily_df['End Date'] = pd.to_datetime(daily_df['End Date'])
@@ -81,7 +77,7 @@ except Exception as e:
     st.error(f"Failed to load portfolio data: {e}")
     st.stop()
 
-if not daily_df_filtered.empty:    # Input for the amount to invest
+if not daily_df_filtered.empty:  # Input for the amount to invest
     to_invest = st.number_input('Amount to invest', value=350, step=10)
 
     # Select products
@@ -94,16 +90,18 @@ if not daily_df_filtered.empty:    # Input for the amount to invest
     # Prepare the split DataFrame for user input and filter by selected products
     filtered_split_df = daily_df_filtered[daily_df_filtered['Product'].isin(included_products)].copy()
 
-    # Replace Current Value from CSV and recalculate using most up-to-date stock prices
-    #filtered_split_df['Current Price (€)'] = filtered_split_df['Ticker'].apply(get_current_stock_price)
+    # Calculate current price from current value and quantity
     filtered_split_df['Current Price (€)'] = filtered_split_df['Current Value (€)'] / filtered_split_df['Quantity']
     filtered_split_df['Current Value (€)'] = filtered_split_df['Current Price (€)'] * filtered_split_df['Quantity']
 
-    filtered_split_df['Current Split (%)'] = round((filtered_split_df['Current Value (€)'] / sum(filtered_split_df['Current Value (€)'])) * 100, 2)
+    filtered_split_df['Current Split (%)'] = round(
+        (filtered_split_df['Current Value (€)'] / sum(filtered_split_df['Current Value (€)'])) * 100, 2)
     filtered_split_df['Wanted Split (%)'] = filtered_split_df['Current Split (%)']
 
     # Save filtered split data in session state
-    st.session_state.split_df = filtered_split_df[['Product', 'Ticker', 'Wanted Split (%)', 'Quantity', 'Current Price (€)', 'Current Value (€)', 'Current Split (%)']]
+    st.session_state.split_df = filtered_split_df[
+        ['Product', 'Ticker', 'Wanted Split (%)', 'Quantity', 'Current Price (€)', 'Current Value (€)',
+         'Current Split (%)']]
 
     # Display editable split DataFrame where users can adjust "Wanted Split (%)"
     edited_split_df = st.data_editor(
@@ -119,6 +117,7 @@ if not daily_df_filtered.empty:    # Input for the amount to invest
         disabled=["Product", "Ticker", "Quantity", "Current Price (€)", "Current Value (€)", "Current Split (%)"],
         hide_index=True,
     )
+
 
     # Function to calculate the new values in result_df based on Wanted Split
     def calculate_new_values():
@@ -136,11 +135,14 @@ if not daily_df_filtered.empty:    # Input for the amount to invest
         split_df['Diff'] = split_df['New Value (€)'] - split_df['Current Value (€)']
         split_df['Amount to Buy'] = round(split_df['Diff'] / split_df['Current Price (€)'], 0)
         split_df['Cost to Buy (€)'] = round(split_df['Amount to Buy'] * split_df['Current Price (€)'], 2)
-        split_df['Actual Split (%)'] = round(((split_df['Current Value (€)'] + split_df['Cost to Buy (€)']) / (sum(split_df['Current Value (€)']) + sum(split_df['Cost to Buy (€)']))*100), 2)
-        
+        split_df['Actual Split (%)'] = round(((split_df['Current Value (€)'] + split_df['Cost to Buy (€)']) / (
+                    sum(split_df['Current Value (€)']) + sum(split_df['Cost to Buy (€)'])) * 100), 2)
+
         # Store result in session state for display
-        st.session_state.result_df = split_df[['Product', 'Ticker', 'Amount to Buy', 'Current Price (€)', 'Cost to Buy (€)', 'Actual Split (%)']]
+        st.session_state.result_df = split_df[
+            ['Product', 'Ticker', 'Amount to Buy', 'Current Price (€)', 'Cost to Buy (€)', 'Actual Split (%)']]
         st.session_state.investment_needed = round(sum(split_df['Cost to Buy (€)']), 2)
+
 
     # Add a "Calculate" button to compute new columns
     if st.button("Calculate"):
@@ -163,12 +165,12 @@ if not daily_df_filtered.empty:    # Input for the amount to invest
     # Refresh stock prices by clearing cache, then rerunning
     if st.button("Refresh Stock Prices"):
         # Clear cached stock price data
-        get_current_stock_price.clear()  
+        get_current_stock_price.clear()
 
         # Remove result_df by making it an empty dataframe
         data = []
         st.session_state.result_df = pd.DataFrame(data)
-        
+
         # Rerun page
         st.rerun()
 else:
