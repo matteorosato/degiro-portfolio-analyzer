@@ -5,19 +5,12 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from src.api.client import fetch_transactions, fetch_isin_mapping
+from src.api.client import fetch_isin_mapping
 from src.data.transformers import prepare_mapping_dataframe
 from src.utils.error_handler import handle_api_error
 
 # Set the page title
 st.set_page_config(page_title="Ticker Mapping", page_icon="📊", layout="wide")
-st.title("Ticker Mapping")
-
-# Call transactions processing (API)
-try:
-    transactions = fetch_transactions()
-except Exception as e:
-    handle_api_error(e, "Could not connect to the transaction processing API", show_exception=True)
 
 # Load ISIN mapping via API
 try:
@@ -31,28 +24,6 @@ if 'df' not in st.session_state:
 
 # Filter out FULL
 st.session_state.df = st.session_state.df[st.session_state.df["Ticker"] != "FULL"]
-
-# Display editable DataFrame
-edited_df = st.data_editor(
-    st.session_state.df.sort_values(by=["Product Name (DeGiro)"], ascending=True),
-    column_config={
-        "Product Type": st.column_config.SelectboxColumn(
-            "Type",
-            help="Type of product (stock, ETF)",
-            width="medium",
-            options=[
-                "Stock",
-                "ETF",
-                "Other",
-            ],
-            required=False,
-        )
-    },
-    disabled=["ISIN", "Exchange", "Product Name (DeGiro)"],
-    hide_index=True,
-    num_rows="fixed",  # Optional: prevents adding new rows manually
-    key="editable_table"
-)
 
 
 # Save logic
@@ -126,93 +97,163 @@ def search_ticker(query, preferred_exchanges=None):
     return "", ""
 
 
+# ============================================================================
+# MAIN CONTENT
+# ============================================================================
+
+st.title("Ticker Mapping")
+
 st.info(
-    "Simplify the 'Display Name' column above to improve auto-fill results. E.g. 'Gamestop' instead of 'GAMESTOP CORPORATION C'")
+    "💡 Tip: Simplify the 'Display Name' column to improve auto-fill results. "
+    "For example, use 'Gamestop' instead of 'GAMESTOP CORPORATION C'."
+)
 
-if st.button("Auto-fill empty tickers using display name"):
-    st.session_state.df = edited_df
-    new_df = st.session_state.df.copy()
-    for i, row in new_df.iterrows():
-        if not row["Ticker"]:
-            display_name = row["Display Name"] if row["Display Name"] else row["Product Name (DeGiro)"]
-            exch = row["Exchange"] if row["Exchange"] else None
-            print(f"Searching for ticker for product: {display_name} on exchange: {exch}")
-            guessed_ticker = search_ticker(display_name, exch)
-            if guessed_ticker:
-                new_df.at[i, "Ticker"] = guessed_ticker[0]
+# ============================================================================
+# TOOLBAR
+# ============================================================================
+
+# Custom CSS for smaller buttons
+st.markdown("""
+    <style>
+    div[data-testid="stButton"] > button {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("🔄 Auto-fill empty tickers", use_container_width=True):
+        new_df = st.session_state.df.copy()
+        total_empty = len(new_df[new_df["Ticker"] == ""])
+        
+        if total_empty == 0:
+            st.info("No empty tickers to fill!")
+        else:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            filled_count = 0
+            
+            for idx, (i, row) in enumerate(new_df[new_df["Ticker"] == ""].iterrows()):
+                display_name = row["Display Name"] if row["Display Name"] else row["Product Name (DeGiro)"]
+                exch = row["Exchange"] if row["Exchange"] else None
+                status_text.text(f"Searching: {display_name[:30]}...")
+                guessed_ticker = search_ticker(display_name, exch)
+                if guessed_ticker:
+                    new_df.at[i, "Ticker"] = guessed_ticker[0]
+                    filled_count += 1
+                progress_bar.progress((idx + 1) / total_empty)
+                time.sleep(1)
+            
+            st.session_state.df = new_df
+            save_mapping(new_df)
+            status_text.empty()
+            progress_bar.empty()
+            st.success(f"Filled {filled_count}/{total_empty} tickers!")
+            time.sleep(1.5)
+            st.rerun()
+
+with col2:
+    if st.button("💾 Save Mapping", type="primary", use_container_width=True):
+        save_mapping(st.session_state.df)
+
+with col3:
+    with st.popover("⚙️ Advanced Options", use_container_width=True):
+        st.subheader("Options")
+        
+        # Import Section
+        st.markdown("**Import Mapping**")
+        
+        uploaded_mapping = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed")
+        
+        if uploaded_mapping:
+            try:
+                new_mapping = json.load(uploaded_mapping)
+                if not isinstance(new_mapping, dict):
+                    st.error("Invalid JSON format.")
+                else:
+                    st.session_state.df = pd.DataFrame([
+                        {
+                            "ISIN": isin,
+                            "Ticker": data.get("ticker", ""),
+                            "Exchange": data.get("exchange", ""),
+                            "Product Name (DeGiro)": data.get("degiro_name", ""),
+                            "Display Name": data.get("display_name", ""),
+                            "Product Type": data.get("product_type", "")
+                        }
+                        for isin, data in new_mapping.items()
+                    ])
+                    st.success("Mapping loaded!")
+                    time.sleep(1)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+        
+        st.divider()
+        
+        # Export Section
+        st.markdown("**Export Mapping**")
+        
+        # Download current mapping
+        current_mapping = {
+            row['ISIN']: {
+                "ticker": row.get("Ticker", ""),
+                "degiro_name": row.get("Product Name (DeGiro)", ""),
+                "display_name": row.get("Display Name", ""),
+                "exchange": row.get("Exchange", ""),
+                "product_type": row.get("Product Type", "")
+            }
+            for _, row in st.session_state.df.iterrows()
+        }
+        json_bytes = json.dumps(current_mapping, indent=4).encode('utf-8')
+        
+        st.download_button(
+            label="📥 Download JSON",
+            data=json_bytes,
+            file_name="isin_mapping.json",
+            mime="application/json",
+            use_container_width=True
+        )
+        
+        st.divider()
+        
+        # Reset Section
+        st.markdown("**⚠️ Danger Zone**")
+        st.caption("This will clear all tickers and reset display names.")
+        
+        if st.button("Reset All Tickers", type="secondary", use_container_width=True):
+            reset_df = st.session_state.df.copy()
+            reset_df["Ticker"] = ""
+            reset_df["Display Name"] = reset_df["Product Name (DeGiro)"]
+            st.session_state.df = reset_df
+            save_mapping(reset_df)
+            st.success("Reset complete!")
             time.sleep(1)
-    st.session_state.df = new_df
-    save_mapping(new_df)
-    st.rerun()
-
-# Save button
-if st.button("Save mapping"):
-    save_mapping(edited_df)
+            st.rerun()
 
 st.divider()
 
-# File uploader and refresh button
-with st.expander("Upload/download mapping JSON file", expanded=False):
-    # JSON mapping file uploader
-    uploaded_mapping = st.file_uploader("Upload ISIN mapping JSON file", type=["json"])
+# ============================================================================
+# EDITABLE TABLE
+# ============================================================================
 
-    if uploaded_mapping:
-        try:
-            # Read and parse the uploaded JSON file
-            new_mapping = json.load(uploaded_mapping)
+# Display editable DataFrame
+edited_df = st.data_editor(
+    st.session_state.df.sort_values(by=["Product Name (DeGiro)"], ascending=True),
+    column_config={
+        "Product Type": st.column_config.TextColumn(
+            "Type",
+            help="Type of product (Stock, ETF, Bond, etc.)",
+            width="medium",
+        )
+    },
+    disabled=["ISIN", "Exchange", "Product Name (DeGiro)"],
+    hide_index=True,
+    num_rows="fixed",
+    key="editable_table"
+)
 
-            # Validate keys and structure (basic check)
-            if not isinstance(new_mapping, dict):
-                st.error("Uploaded JSON is not a valid dictionary.")
-            else:
-                # Update session state DataFrame from uploaded JSON
-                st.session_state.df = pd.DataFrame([
-                    {
-                        "ISIN": isin,
-                        "Ticker": data.get("ticker", ""),
-                        "Exchange": data.get("exchange", ""),
-                        "Product Name (DeGiro)": data.get("degiro_name", ""),
-                        "Display Name": data.get("display_name", ""),
-                        "Product Type": data.get("product_type", "")
-                    }
-                    for isin, data in new_mapping.items()
-                ])
-
-                st.success("Mapping file uploaded and loaded successfully!")
-                st.rerun()
-
-        except Exception as e:
-            st.error(f"Error loading uploaded JSON file: {e}")
-
-    # Prepare current mapping as JSON for download
-    current_mapping = {
-        row['ISIN']: {
-            "ticker": row.get("Ticker", ""),
-            "degiro_name": row.get("Product Name (DeGiro)", ""),
-            "display_name": row.get("Display Name", ""),
-            "exchange": row.get("Exchange", ""),
-            "product_type": row.get("Product Type", "")
-        }
-        for _, row in st.session_state.df.iterrows()
-    }
-    json_bytes = json.dumps(current_mapping, indent=4).encode('utf-8')
-
-    # Download button for the current mapping
-    st.download_button(
-        label="Download current ISIN mapping as JSON",
-        data=json_bytes,
-        file_name="isin_mapping.json",
-        mime="application/json"
-    )
-
-# Reset tickers logic with confirmation
-with st.expander("⚠️ Reset all tickers and display names (this cannot be undone)", expanded=False):
-    st.warning("This will clear all tickers from the table and reset altered display names. Are you sure?")
-    if st.button("Reset", type="primary"):
-        reset_df = st.session_state.df.copy()
-        reset_df["Ticker"] = ""
-        reset_df["Display Name"] = reset_df["Product Name (DeGiro)"]
-        st.session_state.df = reset_df
-        save_mapping(reset_df)
-        st.success("All tickers and display names have been reset.")
-        st.rerun()
+# Update session state with edited data
+st.session_state.df = edited_df
