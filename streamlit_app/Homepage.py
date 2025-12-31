@@ -44,7 +44,7 @@ st.markdown(
     
     ### 📖 Documentation
     
-    - [Project README](https://github.com/your-repo/degiro-portfolio-analyzer)
+    - [Project README](https://github.com/matteorosato/degiro-portfolio-analyzer)
     - [API Documentation](http://localhost:8000/docs)
     - [User Guide](docs/user-guide.md)
     

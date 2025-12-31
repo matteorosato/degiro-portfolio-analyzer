@@ -8,9 +8,7 @@ from src.api.client import (
     is_backend_alive,
     portfolio_data_exists,
     fetch_portfolio_daily,
-    fetch_transactions,
     trigger_portfolio_calculation,
-    trigger_portfolio_refresh,
     upload_transactions_file
 )
 from src.components.dashboard_ui import (
@@ -143,16 +141,9 @@ def refresh_data():
         st.error(f"Error occurred while refreshing data: {e}")
 
 
-# Startup refresh logic
+# Startup refresh logic - Only run initial calculation if no data exists
 if not st.session_state.startup_refresh:
-    if portfolio_data_exists():
-        # Portfolio exists -> trigger background refresh
-        try:
-            trigger_portfolio_refresh()
-            st.toast("Data refreshed successfully.")
-        except Exception as e:
-            st.error(f"Error during data refreshing process: {e}")
-    else:
+    if not portfolio_data_exists():
         # No portfolio data -> Run blocking calculation synchronously
         with st.spinner("Running initial portfolio calculation (this may take some time)..."):
             try:
@@ -191,21 +182,10 @@ product_df = df[df['Product'] == selected_product]
 compare_product_df = df[
     df['Product'] == selected_compare_product] if selected_compare_product != "None" else pd.DataFrame()
 
-# DATE  FILTER    
+# DATE FILTER    
 # Set the full date range as min and max values for the slider
 max_date = df['End Date'].max().to_pydatetime()
-
-# Get min_date from the FIRST TRANSACTION via API
-try:
-    transactions_df = fetch_transactions()
-    if not transactions_df.empty:
-        transactions_df['Date'] = pd.to_datetime(transactions_df['Date'])
-        min_date = transactions_df['Date'].min().to_pydatetime()
-    else:
-        min_date = df['End Date'].min().to_pydatetime()
-except Exception as e:
-    st.warning(f"Could not load first transaction date: {e}. Using portfolio min date.")
-    min_date = df['End Date'].min().to_pydatetime()
+min_date = df['End Date'].min().to_pydatetime()
 
 # Date selection
 date_selection = st.segmented_control(
