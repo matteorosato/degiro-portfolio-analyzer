@@ -1,25 +1,24 @@
-*.pyc
-*.out
-*.env
-terminal.txt
-test.py
-test.ipynb
-logs/
+# Exclude environment files
+.env
+.env.*
+!env.example
 
-# Ignore all files in the data folder
-data/
+# Log files
+*.log
 
-# Ignore data backup
-data_backup/
+# Backend generated folders
+backend/input/
+backend/output/
 
-# Ignore in the uploads
-uploads/
+# VSCode project files
+.vscode/
 
-# Ignore all files in the output folder
-output/
-
-.streamlit/secrets.toml
-
-# IntelliJ IDEA / PyCharm project files
+# PyCharm/IntelliJ project files
 .idea/
 *.iml
+
+# Python artifacts
+*.pyc
+
+# Local/test/secret files
+.streamlit/secrets.toml
