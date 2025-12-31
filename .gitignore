@@ -19,6 +19,9 @@ backend/output/
 
 # Python artifacts
 *.pyc
+__pycache__/
+*.egg-info/
+*.dist-info/
 
 # Local/test/secret files
 .streamlit/secrets.toml
