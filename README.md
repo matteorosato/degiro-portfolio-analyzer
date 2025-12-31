@@ -26,7 +26,7 @@ degiro-portfolio-analyzer/
 │   ├── src/                         # Frontend modules
 │   │   ├── components/              # Reusable UI components
 │   │   └── calculations/            # Frontend business logic
-│   └── assets/                      # Static assets
+
 │       ├── css/                     # Custom stylesheets
 │       └── images/                  # Images and icons
 │

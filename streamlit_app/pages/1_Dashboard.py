@@ -7,7 +7,7 @@ import streamlit as st
 from config import FrontendConfig, APIEndpoints, ColumnMappings
 
 # Config
-st.set_page_config(page_title="Degiro Portfolio Analyzer", page_icon=":bar_chart:", layout="centered")
+st.set_page_config(page_title="Portfolio Dashboard", page_icon=":bar_chart:", layout="centered")
 
 
 def is_backend_alive():
@@ -93,7 +93,7 @@ if not is_backend_alive():
     st.error("Backend API is not reachable. Please ensure the backend is running.")
     st.stop()
 
-st.title("Degiro Portfolio Analyzer")
+st.title("Portfolio Dashboard")
 
 # Check if portfolio data exists
 if not portfolio_data_exists():
