@@ -51,7 +51,7 @@ class AppConfig:
     DESCRIPTION: str = "API to manage and calculate portfolio data"
     
     # Directories (absolute paths)
-    DATA_DIR: str = str(PROJECT_ROOT / "backend" / "input")
+    INPUT_DIR: str = str(PROJECT_ROOT / "backend" / "input")
     OUTPUT_DIR: str = str(PROJECT_ROOT / "backend" / "output")
     LOGS_DIR: str = str(PROJECT_ROOT / "backend" / "logs")
     CACHE_DIR: str = str(PROJECT_ROOT / "backend" / "cache")
@@ -74,7 +74,7 @@ class Environment:
 
 class Directories:
     """Directory paths."""
-    INPUT = AppConfig.DATA_DIR
+    INPUT = AppConfig.INPUT_DIR
     OUTPUT = AppConfig.OUTPUT_DIR
     LOGS = AppConfig.LOGS_DIR
 
@@ -110,5 +110,5 @@ config = AppConfig()
 
 def ensure_directories():
     """Create required directories if they don't exist."""
-    for dir_path in [config.DATA_DIR, config.OUTPUT_DIR, config.LOGS_DIR, config.CACHE_DIR]:
+    for dir_path in [config.INPUT_DIR, config.OUTPUT_DIR, config.LOGS_DIR, config.CACHE_DIR]:
         Path(dir_path).mkdir(parents=True, exist_ok=True)

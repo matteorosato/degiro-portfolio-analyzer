@@ -8,6 +8,7 @@ from .client import (
     trigger_portfolio_calculation,
     trigger_portfolio_refresh,
     upload_transactions_file,
+    cleanup_files,
     delete_all_data
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "trigger_portfolio_calculation",
     "trigger_portfolio_refresh",
     "upload_transactions_file",
+    "cleanup_files",
     "delete_all_data"
 ]

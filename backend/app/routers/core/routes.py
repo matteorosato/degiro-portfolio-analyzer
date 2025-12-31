@@ -1,6 +1,9 @@
 """Core infrastructure routes - health checks, debugging, and logs."""
-from fastapi import APIRouter, HTTPException
+from pathlib import Path
 from typing import List
+
+from fastapi import APIRouter, HTTPException
+
 from backend.app.config import settings, config
 from backend.app.shared.logger import app_logger
 from backend.app.shared.scheduler import scheduled_portfolio_job
@@ -81,3 +84,75 @@ async def read_app_logs(lines: int = 50):
             return all_lines[-lines:]
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Application log file not found")
+
+
+@router.delete("/debug/cleanup")
+async def cleanup_files(
+        input_files: bool = True,
+        output_files: bool = True,
+        log_files: bool = True
+):
+    """Clean up application files and directories.
+    
+    This endpoint allows selective deletion of files in input, output, and logs directories.
+    Useful for resetting the application state during development or troubleshooting.
+    
+    Args:
+        input_files: Delete files in input directory (default: True)
+        output_files: Delete files in output directory (default: True)
+        log_files: Delete files in logs directory (default: True)
+        
+    Returns:
+        dict: Summary of deleted files and directories
+        
+    Note:
+        Directories are preserved, only their contents are deleted.
+    """
+    deleted_items = {
+        "input_files": [],
+        "output_files": [],
+        "log_files": []
+    }
+
+    try:
+        # Clean input directory
+        if input_files:
+            input_dir = Path(config.INPUT_DIR)
+            if input_dir.exists():
+                for item in input_dir.iterdir():
+                    if item.is_file():
+                        item.unlink()
+                        deleted_items["input_files"].append(item.name)
+                        app_logger.info(f"Deleted input file: {item.name}")
+
+        # Clean output directory
+        if output_files:
+            output_dir = Path(config.OUTPUT_DIR)
+            if output_dir.exists():
+                for item in output_dir.iterdir():
+                    if item.is_file():
+                        item.unlink()
+                        deleted_items["output_files"].append(item.name)
+                        app_logger.info(f"Deleted output file: {item.name}")
+
+        # Clean logs directory
+        if log_files:
+            logs_dir = Path(config.LOGS_DIR)
+            if logs_dir.exists():
+                for item in logs_dir.iterdir():
+                    if item.is_file():
+                        item.unlink()
+                        deleted_items["log_files"].append(item.name)
+                        app_logger.info(f"Deleted log file: {item.name}")
+
+        total_deleted = sum(len(files) for files in deleted_items.values())
+
+        return {
+            "status": "success",
+            "message": f"Cleanup completed. Deleted {total_deleted} file(s).",
+            "deleted": deleted_items
+        }
+
+    except Exception as e:
+        app_logger.error(f"Error during cleanup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")

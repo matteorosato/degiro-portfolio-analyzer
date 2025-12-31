@@ -1,7 +1,6 @@
 from datetime import datetime
 
 import pandas as pd
-import requests
 import streamlit as st
 from config import FrontendConfig, APIEndpoints, ColumnMappings
 from src.api.client import (
@@ -9,7 +8,8 @@ from src.api.client import (
     portfolio_data_exists,
     fetch_portfolio_daily,
     trigger_portfolio_calculation,
-    upload_transactions_file
+    upload_transactions_file,
+    cleanup_files
 )
 from src.components.dashboard_ui import (
     render_header,
@@ -111,18 +111,29 @@ def confirm_upload_dialog():
 @st.dialog("Reset Everything")
 def reset_confirm_dialog():
     st.warning("**WARNING: This will delete all portfolio data!**")
-    st.markdown("This action **cannot be undone**. Cached calculations will be removed.")
+    st.markdown("This action **cannot be undone**. All files (input, output, logs) will be deleted.")
 
     if st.button("Yes, Reset All", use_container_width=True, type="primary"):
         with st.spinner("Resetting..."):
             try:
-                # Call backend to delete all data
-                response = requests.delete(
-                    FrontendConfig.get_api_url("/debug/delete-all"),
-                    timeout=FrontendConfig.API_TIMEOUT
+                # Call backend to clean up all files
+                result = cleanup_files(
+                    input_files=True,
+                    output_files=True,
+                    log_files=True
                 )
-                response.raise_for_status()
-                st.success("Reset complete!")
+                st.success(f"✅ {result['message']}")
+                
+                # Show details of deleted files
+                deleted = result.get('deleted', {})
+                if any(deleted.values()):
+                    with st.expander("View deleted files"):
+                        if deleted.get('input_files'):
+                            st.write("**Input files:**", ", ".join(deleted['input_files']))
+                        if deleted.get('output_files'):
+                            st.write("**Output files:**", ", ".join(deleted['output_files']))
+                        if deleted.get('log_files'):
+                            st.write("**Log files:**", ", ".join(deleted['log_files']))
             except Exception as e:
                 st.error(f"Reset failed: {e}")
 
@@ -226,12 +237,6 @@ if not filtered_df.empty:
     st.divider()
 else:
     st.write("No data available for the selected product and date range.")
-
-# ---- Additional Metrics Section ----
-# st.subheader("Additional Portfolio Metrics")
-#
-# with st.expander("Data", expanded=False):
-#     st.write(filtered_df.drop(columns=['Start Date']))
 
 # File upload in sidebar
 with st.sidebar:
