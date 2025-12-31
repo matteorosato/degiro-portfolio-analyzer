@@ -138,6 +138,26 @@ def fetch_isin_mapping() -> Dict[str, Any]:
     return response.json()
 
 
+def save_isin_mapping(mapping_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Save ISIN to ticker mapping to backend.
+    
+    Args:
+        mapping_data: Dictionary with ISIN codes as keys and mapping metadata as values
+        
+    Returns:
+        Response JSON with save status and entry count
+        
+    Raises:
+        requests.RequestException: On API errors
+    """
+    response = _make_api_request(
+        "POST",
+        APIEndpoints.PORTFOLIO_ISIN_MAPPING,
+        json=mapping_data
+    )
+    return response.json()
+
+
 def portfolio_data_exists() -> bool:
     """Check if portfolio data is available via API.
     

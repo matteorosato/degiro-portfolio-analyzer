@@ -1,6 +1,6 @@
 """Portfolio domain routes."""
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from typing import Optional
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Body
+from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 import pandas as pd
 import json
@@ -203,4 +203,54 @@ async def get_isin_mapping():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to read ISIN mapping: {str(e)}"
+        )
+
+
+@router.post("/isin-mapping")
+async def save_isin_mapping(mapping_data: Dict[str, Any] = Body(...)):
+    """Update ISIN to ticker mapping data.
+    
+    Replaces the entire ISIN mapping file with new data.
+    
+    Args:
+        mapping_data: Dictionary with ISIN codes as keys and mapping metadata as values
+        
+    Returns:
+        JSON response with success message and number of entries saved
+        
+    Raises:
+        HTTPException: If save operation fails
+    """
+    try:
+        if not mapping_data:
+            raise HTTPException(
+                status_code=400,
+                detail="Mapping data cannot be empty"
+            )
+        
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(FilePaths.ISIN_MAPPING), exist_ok=True)
+        
+        # Save mapping to file
+        with open(FilePaths.ISIN_MAPPING, 'w', encoding='utf-8') as f:
+            json.dump(mapping_data, f, indent=4, ensure_ascii=False)
+        
+        app_logger.info(f"[API] ISIN mapping updated successfully with {len(mapping_data)} entries")
+        
+        return JSONResponse(
+            content={
+                "message": "ISIN mapping updated successfully",
+                "entries_saved": len(mapping_data),
+                "success": True
+            },
+            status_code=200
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        app_logger.error(f"[API] Error updating ISIN mapping: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update ISIN mapping: {str(e)}"
         )

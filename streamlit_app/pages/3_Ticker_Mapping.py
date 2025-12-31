@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from src.api.client import fetch_isin_mapping
+from src.api.client import fetch_isin_mapping, save_isin_mapping
 from src.data.transformers import prepare_mapping_dataframe
 from src.utils.error_handler import handle_api_error
 
@@ -21,9 +21,6 @@ except Exception as e:
 # Load or initialize mapping
 if 'df' not in st.session_state:
     st.session_state.df = prepare_mapping_dataframe(mapping)
-
-# Filter out FULL
-st.session_state.df = st.session_state.df[st.session_state.df["Ticker"] != "FULL"]
 
 
 # Save logic
@@ -54,8 +51,17 @@ def save_mapping(df):
         for _, row in st.session_state.df.iterrows()
     }
 
-    # Note: Mapping is now managed via API, local file operations removed
-    st.success("Mapping saved successfully!")
+    # Save to backend
+    try:
+        response = save_isin_mapping(updated_mapping)
+        if response.get("success"):
+            # Clear cache to force reload on next page load
+            st.cache_data.clear()
+            st.toast(f"✅ Mapping saved!")
+        else:
+            st.error("Failed to save mapping")
+    except Exception as e:
+        st.error(f"Error saving mapping: {str(e)}")
 
 
 # Yahoo Finance ticker search
@@ -104,8 +110,10 @@ def search_ticker(query, preferred_exchanges=None):
 st.title("Ticker Mapping")
 
 st.info(
-    "💡 Tip: Simplify the 'Display Name' column to improve auto-fill results. "
-    "For example, use 'Gamestop' instead of 'GAMESTOP CORPORATION C'."
+    "**Quick help:**\n\n"
+    "**🔄 Auto-fill empty tickers** - Search Yahoo Finance to automatically fill missing ticker symbols\n\n"
+    "**💾 Save Mapping** - Save all the current changes (required to apply modifications)\n\n"
+    "**⚙️ Advanced Options** - Import/export mapping as JSON or reset all tickers"
 )
 
 # ============================================================================
@@ -239,9 +247,12 @@ st.divider()
 # EDITABLE TABLE
 # ============================================================================
 
+# Filter out FULL from table display (but keep in session for save)
+table_df = st.session_state.df[st.session_state.df["Ticker"] != "FULL"]
+
 # Display editable DataFrame
 edited_df = st.data_editor(
-    st.session_state.df.sort_values(by=["Product Name (DeGiro)"], ascending=True),
+    table_df.sort_values(by=["Product Name (DeGiro)"], ascending=True),
     column_config={
         "Product Type": st.column_config.TextColumn(
             "Type",
