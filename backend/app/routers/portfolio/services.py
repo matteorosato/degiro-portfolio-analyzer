@@ -280,30 +280,6 @@ class PortfolioService:
             stock_prices_df.to_parquet(config.STOCK_PRICES, index=False)
 
             app_logger.info("[PORTFOLIO-CALC] Daily output saved locally")
-
-            # Extract monthly data from the daily data
-            monthly_results = portfolio_results_df.copy()
-            monthly_results['end_date'] = pd.to_datetime(monthly_results['end_date'])
-
-            # Set index and sort values to ensure correct selection
-            monthly_results = monthly_results.sort_values(['ticker', 'end_date'])
-
-            # Resample first-of-month data per ticker
-            monthly_results_df = (
-                monthly_results.set_index('end_date')
-                .groupby('ticker')
-                .resample('MS')
-                .first()
-                .reset_index(level=0, drop=True)
-                .reset_index()
-            )
-            
-            # Convert 'end_date' to string in 'YYYY-MM-DD' format
-            monthly_results_df['end_date'] = monthly_results_df['end_date'].dt.strftime('%Y-%m-%d')
-
-            # Save the updated DataFrame to a Parquet file
-            monthly_results_df.to_parquet(config.PORTFOLIO_MONTHLY, index=False)
-            app_logger.info("[PORTFOLIO-CALC] Monthly output saved locally")
             
             # End timing
             end_time = time.time()

@@ -65,7 +65,6 @@ class APIEndpoints:
     PORTFOLIO_CALCULATE = "/portfolio/calculate"
     PORTFOLIO_REFRESH = "/portfolio/refresh"
     PORTFOLIO_DAILY = "/portfolio/daily"
-    PORTFOLIO_MONTHLY = "/portfolio/monthly"
     PORTFOLIO_ISIN_MAPPING = "/portfolio/isin-mapping"
 
     # Debug

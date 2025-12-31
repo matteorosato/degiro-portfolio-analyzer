@@ -60,7 +60,6 @@ class AppConfig:
     TRANSACTION_CSV: str = str(PROJECT_ROOT / "backend" / "input" / "transactions.csv")
     ISIN_MAPPING: str = str(PROJECT_ROOT / "backend" / "output" / "isin_mapping.json")
     PORTFOLIO_DAILY: str = str(PROJECT_ROOT / "backend" / "output" / "portfolio_performance_daily.parquet")
-    PORTFOLIO_MONTHLY: str = str(PROJECT_ROOT / "backend" / "output" / "portfolio_performance_monthly.parquet")
     STOCK_PRICES: str = str(PROJECT_ROOT / "backend" / "output" / "stock_prices.parquet")
     APP_LOG: str = str(PROJECT_ROOT / "backend" / "logs" / "app.log")
     SCHEDULER_LOG: str = str(PROJECT_ROOT / "backend" / "logs" / "scheduler.log")
@@ -87,7 +86,6 @@ class Directories:
 class FilePaths:
     """File paths."""
     PORTFOLIO_DAILY = AppConfig.PORTFOLIO_DAILY
-    PORTFOLIO_MONTHLY = AppConfig.PORTFOLIO_MONTHLY
     STOCK_PRICES = AppConfig.STOCK_PRICES
     ISIN_MAPPING = AppConfig.ISIN_MAPPING
     TRANSACTION_CSV = AppConfig.TRANSACTION_CSV
@@ -99,7 +97,6 @@ class FilePaths:
         """Get list of all output files."""
         return [
             FilePaths.PORTFOLIO_DAILY,
-            FilePaths.PORTFOLIO_MONTHLY,
             FilePaths.STOCK_PRICES,
             FilePaths.ISIN_MAPPING,
         ]

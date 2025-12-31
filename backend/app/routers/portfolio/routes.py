@@ -1,5 +1,6 @@
 """Portfolio domain routes."""
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from typing import Optional
 from fastapi.responses import JSONResponse
 import pandas as pd
 import json
@@ -99,11 +100,24 @@ async def get_refresh_status_route():
 
 
 @router.get("/daily")
-async def get_portfolio_daily():
-    """Get daily portfolio performance data.
+async def get_portfolio_daily(
+    ticker: Optional[str] = Query(None, description="Filter by ticker/product"),
+    start_date: Optional[str] = Query(None, description="Filter from date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    limit: int = Query(10000, le=50000, description="Maximum records to return"),
+    offset: int = Query(0, ge=0, description="Number of records to skip")
+):
+    """Get daily portfolio performance data with optional filtering.
     
     Returns the processed daily portfolio performance data as JSON.
-    This includes positions, performance metrics, and historical values.
+    Supports filtering by ticker, date range, and pagination.
+    
+    Args:
+        ticker: Filter by specific ticker/product name
+        start_date: Filter records from this date onwards
+        end_date: Filter records up to this date
+        limit: Maximum number of records to return (default: 10000, max: 50000)
+        offset: Number of records to skip for pagination
     
     Returns:
         JSON array of daily portfolio records
@@ -120,13 +134,28 @@ async def get_portfolio_daily():
         
         df = pd.read_parquet(FilePaths.PORTFOLIO_DAILY)
         
+        # Apply filters
+        if ticker:
+            df = df[df['ticker'] == ticker]
+        
+        if start_date or end_date:
+            df['end_date'] = pd.to_datetime(df['end_date'])
+            if start_date:
+                df = df[df['end_date'] >= start_date]
+            if end_date:
+                df = df[df['end_date'] <= end_date]
+        
+        # Apply pagination
+        total_records = len(df)
+        df = df.iloc[offset:offset + limit]
+        
         # Convert date columns to string for JSON serialization
         date_columns = df.select_dtypes(include=['datetime64']).columns
         for col in date_columns:
             df[col] = df[col].astype(str)
         
         data = df.to_dict(orient="records")
-        app_logger.info(f"[API] Returning {len(data)} daily portfolio records")
+        app_logger.info(f"[API] Returning {len(data)} of {total_records} daily portfolio records (offset={offset}, limit={limit})")
         
         return JSONResponse(content=data)
         
@@ -134,48 +163,6 @@ async def get_portfolio_daily():
         raise
     except Exception as e:
         app_logger.error(f"[API] Error reading daily portfolio: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to read portfolio data: {str(e)}"
-        )
-
-
-@router.get("/monthly")
-async def get_portfolio_monthly():
-    """Get monthly portfolio performance data.
-    
-    Returns the processed monthly portfolio performance data as JSON.
-    This provides aggregated monthly views of portfolio performance.
-    
-    Returns:
-        JSON array of monthly portfolio records
-        
-    Raises:
-        HTTPException: If portfolio data file doesn't exist or can't be read
-    """
-    try:
-        if not os.path.exists(FilePaths.PORTFOLIO_MONTHLY):
-            raise HTTPException(
-                status_code=404,
-                detail="Portfolio monthly data not found. Run calculation first."
-            )
-        
-        df = pd.read_parquet(FilePaths.PORTFOLIO_MONTHLY)
-        
-        # Convert date columns to string
-        date_columns = df.select_dtypes(include=['datetime64']).columns
-        for col in date_columns:
-            df[col] = df[col].astype(str)
-        
-        data = df.to_dict(orient="records")
-        app_logger.info(f"[API] Returning {len(data)} monthly portfolio records")
-        
-        return JSONResponse(content=data)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        app_logger.error(f"[API] Error reading monthly portfolio: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to read portfolio data: {str(e)}"

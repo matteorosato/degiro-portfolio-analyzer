@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from backend.app.config import settings, config, ensure_directories
 from backend.app.shared.logger import app_logger
 from backend.app.shared.scheduler import start_scheduled_tasks
@@ -58,6 +59,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Configure GZip compression (Priority 1 optimization)
+# Compresses responses > 1KB, typically achieving 70% reduction on JSON payloads
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Register routers with API versioning
 API_V1_PREFIX = "/api/v1"

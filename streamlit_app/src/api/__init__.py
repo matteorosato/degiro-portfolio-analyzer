@@ -2,7 +2,6 @@
 
 from .client import (
     fetch_portfolio_daily,
-    fetch_portfolio_monthly,
     fetch_transactions,
     fetch_isin_mapping,
     trigger_portfolio_calculation,
@@ -14,7 +13,6 @@ from .client import (
 
 __all__ = [
     "fetch_portfolio_daily",
-    "fetch_portfolio_monthly",
     "fetch_transactions",
     "fetch_isin_mapping",
     "trigger_portfolio_calculation",
