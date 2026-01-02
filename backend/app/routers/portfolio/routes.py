@@ -228,6 +228,16 @@ async def save_isin_mapping(mapping_data: Dict[str, Any] = Body(...)):
                 detail="Mapping data cannot be empty"
             )
         
+        # Ensure FULL_PORTFOLIO entry exists
+        if "FULL_PORTFOLIO" not in mapping_data:
+            mapping_data["FULL_PORTFOLIO"] = {
+                "ticker": "FULL",
+                "degiro_name": "Full portfolio",
+                "display_name": "Full portfolio",
+                "exchange": "",
+                "product_type": ""
+            }
+        
         # Ensure output directory exists
         os.makedirs(os.path.dirname(FilePaths.ISIN_MAPPING), exist_ok=True)
         
