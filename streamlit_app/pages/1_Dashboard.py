@@ -117,6 +117,9 @@ def reset_confirm_dialog():
     if st.button("Yes, Reset All", use_container_width=True, type="primary"):
         with st.spinner("Resetting..."):
             try:
+                # Clear session state before reset
+                if "portfolio_df" in st.session_state:
+                    del st.session_state.portfolio_df
                 # Call backend to clean up files
                 result = cleanup_files(
                     input_files=True,
@@ -202,7 +205,10 @@ loading_placeholder.empty()
 
 # Fetch portfolio data from API
 try:
-    df = fetch_portfolio_daily()
+    if "portfolio_df" not in st.session_state or st.session_state.get("force_refresh_portfolio"):
+        st.session_state.portfolio_df = fetch_portfolio_daily()
+        st.session_state.force_refresh_portfolio = False
+    df = st.session_state.portfolio_df
     df = prepare_portfolio_dataframe(df)
 except Exception as e:
     handle_api_error(e, "Failed to fetch portfolio data")
@@ -283,6 +289,7 @@ with st.sidebar:
         if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True,
                      help="Recalculates your portfolio with current data"):
             st.session_state.startup_refresh = False
+            st.session_state.force_refresh_portfolio = True
             with st.spinner("Refreshing data..."):
                 refresh_data()
             st.success(f"✅ Data updated successfully!")
