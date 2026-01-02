@@ -47,6 +47,10 @@ def read_log_file(log_type: str = "app", max_lines: int = 50) -> str:
         with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
 
+        # If max_lines is very large (simulate 'All'), return all
+        if max_lines is None or max_lines >= 1000000:
+            return ''.join(lines)
+
         # Return last N lines
         if len(lines) <= max_lines:
             return ''.join(lines)

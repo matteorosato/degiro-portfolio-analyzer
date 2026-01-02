@@ -135,16 +135,6 @@ async def cleanup_files(
                         deleted_items["output_files"].append(item.name)
                         app_logger.info(f"Deleted output file: {item.name}")
 
-        # Clean logs directory
-        if log_files:
-            logs_dir = Path(config.LOGS_DIR)
-            if logs_dir.exists():
-                for item in logs_dir.iterdir():
-                    if item.is_file():
-                        item.unlink()
-                        deleted_items["log_files"].append(item.name)
-                        app_logger.info(f"Deleted log file: {item.name}")
-
         total_deleted = sum(len(files) for files in deleted_items.values())
 
         return {

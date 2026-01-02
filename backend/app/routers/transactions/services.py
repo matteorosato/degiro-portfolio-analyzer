@@ -1,21 +1,21 @@
 """Business logic for transactions domain."""
-import pandas as pd
 import json
 import warnings
 from pathlib import Path
 from typing import Optional, Dict
+
+import pandas as pd
 import yfinance as yf
 
 from backend.app.config import config
 from backend.app.shared.logger import app_logger
-from .validators import validate_isin, validate_transaction_data
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
 
 class TransactionService:
     """Service for managing financial transactions."""
-    
+
     def __init__(self):
         """Initialize transaction service with file paths."""
         self.csv_path = Path(config.TRANSACTION_CSV)
@@ -29,7 +29,7 @@ class TransactionService:
             "NDQ": "NYQ",
             "NSY": "SWX",
         }
-    
+
     def get_all_transactions(self) -> pd.DataFrame:
         """
         Load and process all transactions from CSV file.
@@ -41,35 +41,35 @@ class TransactionService:
         """
         try:
             app_logger.info("[TRANSACTIONS] Processing transactions...")
-            
+
             # Step 1: Load raw data from CSV
             raw_df = self._load_data()
-            
+
             if raw_df.empty:
                 app_logger.warning("[TRANSACTIONS] No transaction data found")
                 return pd.DataFrame()
-            
+
             # Step 2: Update ISIN mapping and apply ticker mapping
             mapped_df = self._map_isin(raw_df)
-            
+
             # Step 3: Clean and transform the data
             transactions_df = self._prepare_data(mapped_df)
-            
+
             app_logger.info(f"[TRANSACTIONS] Processed {len(transactions_df)} transactions successfully")
-            
+
             return transactions_df.copy()
-            
+
         except Exception as e:
             app_logger.error(f"[TRANSACTIONS] Error processing transactions: {e}", exc_info=True)
             raise
-    
+
     def get_filtered_transactions(
-        self,
-        isin: Optional[str] = None,
-        stock: Optional[str] = None,
-        action: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+            self,
+            isin: Optional[str] = None,
+            stock: Optional[str] = None,
+            action: Optional[str] = None,
+            start_date: Optional[str] = None,
+            end_date: Optional[str] = None
     ) -> pd.DataFrame:
         """
         Get transactions with filters applied.
@@ -85,31 +85,31 @@ class TransactionService:
             Filtered DataFrame
         """
         df = self.get_all_transactions()
-        
+
         if df.empty:
             return df
-        
+
         # Apply filters
         if isin:
             df = df[df['ISIN'] == isin]
-        
+
         if stock:
             df = df[df['Stock'] == stock]
-        
+
         if action:
             df = df[df['Action'] == action]
-        
+
         if start_date:
             df['Date'] = pd.to_datetime(df['Date'])
             df = df[df['Date'] >= pd.to_datetime(start_date)]
-        
+
         if end_date:
             df['Date'] = pd.to_datetime(df['Date'])
             df = df[df['Date'] <= pd.to_datetime(end_date)]
-        
+
         app_logger.info(f"[TRANSACTIONS] Filtered to {len(df)} transactions")
         return df
-    
+
     def get_transaction_stats(self) -> Dict:
         """
         Calculate statistics about transactions.
@@ -118,7 +118,7 @@ class TransactionService:
             Dictionary with statistics
         """
         df = self.get_all_transactions()
-        
+
         if df.empty:
             return {
                 "total_transactions": 0,
@@ -129,9 +129,9 @@ class TransactionService:
                 "total_invested": 0.0,
                 "total_fees": 0.0
             }
-        
+
         df['Date'] = pd.to_datetime(df['Date'])
-        
+
         return {
             "total_transactions": len(df),
             "total_buys": len(df[df['Action'] == 'BUY']),
@@ -144,7 +144,7 @@ class TransactionService:
             "total_invested": float(df[df['Action'] == 'BUY']['Value'].sum()),
             "total_fees": float(df['Transaction_costs'].sum())
         }
-    
+
     def _load_data(self) -> pd.DataFrame:
         """
         Load transactions from CSV and perform basic column mapping.
@@ -159,7 +159,7 @@ class TransactionService:
             error_msg = f"Transaction CSV file not found: {self.csv_path}"
             app_logger.error(f"[TRANSACTIONS] {error_msg}")
             raise FileNotFoundError(error_msg)
-        
+
         try:
             # Read CSV with specific columns by index
             # CSV structure (Excel-exported format):
@@ -182,24 +182,24 @@ class TransactionService:
             # 16: Total
             # 17: Total_Currency (EUR, skipped)
             # 18: Order_ID (skipped)
-            
+
             usecols = [0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 13, 14, 16]
             column_names = [
                 'Date', 'Time', 'Product_Name_DeGiro', 'ISIN', 'Exchange',
                 'Quantity', 'Price', 'Price_Currency', 'Local_Value', 'Value', 'Exchange_Rate',
-                'Transaction_Costs', 'Total'
+                'Transaction_costs', 'Total'
             ]
-            
+
             df = pd.read_csv(self.csv_path, usecols=usecols, header=0, sep=",")
             df.columns = column_names
-            
+
             return df
-        
+
         except Exception as e:
             error_msg = f"Error loading CSV: {e}"
             app_logger.error(f"[TRANSACTIONS] {error_msg}", exc_info=True)
             raise
-    
+
     def _map_isin(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Update ISIN mapping file and apply ticker mapping to DataFrame.
@@ -212,13 +212,13 @@ class TransactionService:
         """
         if df.empty:
             return df
-        
+
         try:
             app_logger.info("[ISIN-MAPPING] Updating ISIN mapping...")
-            
+
             # Update mapping file
             isin_mapping = self._update_isin_mapping(df)
-            
+
             # Apply mapping to DataFrame
             if isin_mapping:
                 df['Stock'] = df['ISIN'].apply(
@@ -230,16 +230,16 @@ class TransactionService:
             else:
                 df['Stock'] = ''
                 df['Product'] = ''
-            
+
             app_logger.info("[ISIN-MAPPING] Mapping applied successfully")
             return df
-            
+
         except Exception as e:
             app_logger.error(f"[ISIN-MAPPING] Error: {e}", exc_info=True)
             df['Stock'] = ''
             df['Product'] = ''
             return df
-    
+
     def _update_isin_mapping(self, df: pd.DataFrame) -> Dict:
         """
         Update ISIN to ticker mapping JSON file.
@@ -301,8 +301,8 @@ class TransactionService:
 
         # Filter valid ISINs: not null, not empty after stripping whitespace
         valid_mask = (
-            valid_isins_df['ISIN'].notna() &
-            (valid_isins_df['ISIN'].astype(str).str.strip() != "")
+                valid_isins_df['ISIN'].notna() &
+                (valid_isins_df['ISIN'].astype(str).str.strip() != "")
         )
         return valid_isins_df[valid_mask]
 
@@ -343,7 +343,7 @@ class TransactionService:
         except Exception as e:
             app_logger.error(f"[ISIN-MAPPING] Failed to save mapping file: {e}")
             raise
-    
+
     def _get_yahoo_product(self, isin: str, exchange: Optional[str] = None) -> dict:
         """
         Retrieve product information from Yahoo Finance using ISIN.
@@ -358,22 +358,22 @@ class TransactionService:
         results_by_isin = yf.Search(isin, max_results=1)
         if not results_by_isin.quotes:
             return {}
-        
+
         product_long_name = results_by_isin.quotes[0].get('longname')
         if not product_long_name:
             return {}
-        
+
         results_by_product_name = yf.Search(product_long_name, max_results=20)
         if not results_by_product_name.quotes or not exchange:
             return {}
-        
+
         # Search for product with desired exchange
         for quote in results_by_product_name.quotes:
             if quote.get('exchange') == exchange:
                 return quote
-        
+
         return {}
-    
+
     def _prepare_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Clean and transform transaction data.
@@ -386,10 +386,10 @@ class TransactionService:
         """
         if df.empty:
             return df
-        
+
         try:
             app_logger.info("[TRANSACTIONS] Starting data preparation...")
-            
+
             # Parse dates and times first
             df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
             df['Time'] = pd.to_datetime(df['Time'], format='%H:%M').dt.time
@@ -397,12 +397,12 @@ class TransactionService:
             # Ensure correct types
             df['Quantity'] = df['Quantity'].fillna(0).astype(int)
             df['Exchange'] = df['Exchange'].fillna('').astype(str)
-            
+
             # Determine action (BUY/SELL)
             df['Action'] = df['Quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
-            
+
             # Convert numeric columns (handle both dot and comma decimal separators)
-            float_columns = ['Price', 'Local_Value', 'Value', 'Exchange_Rate', 'Transaction_Costs', 'Total']
+            float_columns = ['Price', 'Local_Value', 'Value', 'Exchange_Rate', 'Transaction_costs', 'Total']
             for col in float_columns:
                 df[col] = (
                     df[col]
@@ -414,10 +414,10 @@ class TransactionService:
 
             # Sort chronologically
             df = df.sort_values(by=["Date", "Time"]).reset_index(drop=True)
-            
+
             app_logger.info(f"[TRANSACTIONS] Data preparation completed successfully with {len(df)} rows")
             return df
-            
+
         except Exception as e:
             app_logger.error(f"[TRANSACTIONS] Error preparing data: {e}", exc_info=True)
             return pd.DataFrame()
