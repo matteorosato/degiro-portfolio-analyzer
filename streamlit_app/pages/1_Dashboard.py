@@ -112,7 +112,8 @@ def confirm_upload_dialog():
 @st.dialog("Reset Everything")
 def reset_confirm_dialog():
     st.warning("**WARNING: This will delete all portfolio data!**")
-    st.markdown("This action **cannot be undone**. All files (input, output) will be deleted. Log files will be preserved for troubleshooting.")
+    st.markdown(
+        "This action **cannot be undone**. All files (input, output) will be deleted. Log files will be preserved for troubleshooting.")
 
     if st.button("Yes, Reset All", use_container_width=True, type="primary"):
         with st.spinner("Resetting..."):
@@ -292,7 +293,7 @@ with st.sidebar:
             st.session_state.force_refresh_portfolio = True
             with st.spinner("Refreshing data..."):
                 refresh_data()
-            st.success(f"✅ Data updated successfully!")
+            st.toast(f"✅ Data updated successfully!")
             st.info(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             st.session_state.startup_refresh = True
             st.rerun()
