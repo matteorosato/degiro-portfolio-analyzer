@@ -37,6 +37,14 @@ class UIConstants:
     HOLDINGS_OPTIONS = ["Current Holdings", "All Holdings"]
     FULL_PORTFOLIO_NAME = "Full portfolio"
 
+    # Type Split Page
+    DATE_RANGE_OPTIONS = ["1Y", "3M", "1M", "1W", "YTD", "Last year", "Last month", "All time"]
+    PLOTLY_LINE_CHART_HEIGHT = 400
+    PLOTLY_LINE_CHART_WIDTH = 1200
+    PLOTLY_SPLIT_CHART_HEIGHT = 350
+    PLOTLY_SMOOTH_FACTOR = 0.7
+    PLOTLY_BAR_GAP = 0.4
+
     @staticmethod
     def calculate_table_height(row_count: int) -> int:
         """Calculate table height based on row count."""
