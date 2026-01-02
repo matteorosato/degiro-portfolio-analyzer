@@ -32,6 +32,11 @@ class UIConstants:
     MAX_FILE_SIZE_MB = 50
     ALLOWED_FILE_TYPES = ["csv"]
 
+    # Analysis Page
+    TREND_DAYS = 30
+    HOLDINGS_OPTIONS = ["Current Holdings", "All Holdings"]
+    FULL_PORTFOLIO_NAME = "Full portfolio"
+
     @staticmethod
     def calculate_table_height(row_count: int) -> int:
         """Calculate table height based on row count."""

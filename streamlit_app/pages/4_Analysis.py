@@ -1,16 +1,27 @@
-from datetime import timedelta
-
 import pandas as pd
 import streamlit as st
 
 from src.api.client import fetch_portfolio_daily
 from src.data.transformers import prepare_portfolio_dataframe
 from src.utils.error_handler import handle_api_error
+from src.utils.styling import color_net_performance
+from src.utils.data_helpers import remove_flat_line, filter_full_portfolio
+from src.utils.formatting import format_portfolio_badge
+from src.services.analysis_service import (
+    find_valid_dates,
+    calculate_daily_change,
+    prepare_display_dataframe,
+)
+from config import UIConstants
 
 # Set the page title
 st.set_page_config(page_title="Portfolio Analysis", page_icon="📊", layout="wide")
 
 st.title("Portfolio Analysis")
+
+# ============================================================================
+# DATA LOADING
+# ============================================================================
 
 # Load portfolio data via API
 try:
@@ -24,153 +35,92 @@ df['End Date'] = pd.to_datetime(df['End Date'])
 df = df.sort_values(by='End Date', ascending=True)
 
 # Remove 'Full Portfolio' entry
-df = df[df["Product"] != "Full portfolio"]
+df = filter_full_portfolio(df)
+
+# ============================================================================
+# USER INPUT
+# ============================================================================
 
 # Set the default date to most recent end date
 default_selected_date = df['End Date'].max()
 
 # Date selection
-selected_date = st.date_input("Select End Date", default_selected_date, min_value=df["End Date"].min(),
-                              max_value=df["End Date"].max(), width=250)
+selected_date = st.date_input(
+    "Select End Date",
+    default_selected_date,
+    min_value=df["End Date"].min(),
+    max_value=df["End Date"].max()
+)
 selected_date = pd.to_datetime(selected_date)
 
+# Holdings filter
 holdings_option = st.segmented_control(
     "Holdings to include",
-    options=["Current Holdings", "All Holdings"],
+    options=UIConstants.HOLDINGS_OPTIONS,
     default="Current Holdings",
     selection_mode="single",
     help="Current Holdings only include products with a non-zero current value"
 )
 
+# ============================================================================
+# DATA PROCESSING
+# ============================================================================
+
+# Verify data availability
 filtered_df = df[df['End Date'] <= selected_date]
 if filtered_df.empty:
     st.error("No data found for the selected date. Please select a different date.")
     st.stop()
 
-# Get the last date and the previous date for daily change calculation
+# Find valid dates for daily change calculation
 all_dates = sorted(df['End Date'].unique())
-selected_date_ts = pd.Timestamp(selected_date)
+date_1, date_0 = find_valid_dates(all_dates, pd.Timestamp(selected_date))
 
-# Find the index of the selected date (or the closest date before it)
-valid_dates = [d for d in all_dates if d <= selected_date_ts]
-if not valid_dates:
-    # If no date before selected_date, use the first date
-    date_1 = all_dates[0]
-    date_0 = all_dates[0]
-else:
-    date_1 = valid_dates[-1]  # Most recent valid date
-    date_1_idx = all_dates.index(date_1)
-    date_0 = all_dates[date_1_idx - 1] if date_1_idx > 0 else date_1  # Previous date
+# Calculate daily change metrics
+daily_metrics = calculate_daily_change(df, date_1, date_0)
 
-# Daily change in current value (1 day: yesterday vs today)
-daily_current_value_start = df[df['End Date'] == date_0]['Current Value (€)'].sum()
-daily_current_value_end = df[df['End Date'] == date_1]['Current Value (€)'].sum()
+# Prepare display DataFrame
+display_df = prepare_display_dataframe(df, date_1, holdings_option)
 
-if daily_current_value_start != 0:
-    daily_current_value_delta = round((daily_current_value_end - daily_current_value_start), 2)
-    daily_current_value_delta_eur = f"+€ {abs(daily_current_value_delta)}" if daily_current_value_delta > 0 else f"-€ {abs(daily_current_value_delta)}"
-    daily_current_value_delta_per = round(
-        ((daily_current_value_end - daily_current_value_start) / daily_current_value_start) * 100, 2)
-else:
-    daily_current_value_delta = 0
-    daily_current_value_delta_eur = "€ 0"
-    daily_current_value_delta_per = 0
-
-# Current portfolio value (at selected date)
-current_portfolio_value = df[df['End Date'] == date_1]['Current Value (€)'].sum()
-
-# Filter the DataFrame for the selected date
-selected_day_df = df[df['End Date'] == date_1]
-
-# Filter based on holdings option
-if holdings_option == "Current Holdings":
-    selected_day_df = selected_day_df[selected_day_df["Quantity"] != 0]
-
-# Prepare display df
-display_df = selected_day_df.copy()
-
-# Only select relevant columns
-display_df = display_df[['Product', 'Quantity', 'Current Value (€)',
-                         'Net Return (€)', 'Net Performance (%)', 'Total Cost (€)'
-                         ]]
-
-# Create new column with 30-day Net Performance (%) trend as list
-date_L30 = date_1 - timedelta(days=30)
-# Create new column with 30-day Net Performance (%) trend as list
-date_L30 = date_1 - timedelta(days=30)
-display_df["Net Performance (%) - Trend"] = display_df.apply(
-    lambda row: df[
-        (df["Product"] == row["Product"]) &
-        (df["End Date"] >= date_L30) &
-        (df["End Date"] <= date_1)
-        ]["Net Performance (%)"].tolist(),
-    axis=1
-)
-
-# Allocation
-display_df["Current Allocation %"] = display_df['Current Value (€)'] / display_df['Current Value (€)'].sum() * 100
-
-# Sort products by allocation and then by total cost
-display_df = display_df.sort_values(
-    by=['Current Allocation %', 'Total Cost (€)'],
-    ascending=[False, False]
-)
-
-df_height_px = 50 * len(display_df) + 37
-
-
-# Custom styling function
-def color_net_performance(val):
-    color = '#09ab3b' if val > 0 else '#ff2b2b' if val < 0 else 'gray'
-    return f'color: {color}'
-
-
-# Final column order
-display_df = display_df[['Product', 'Current Allocation %', 'Quantity', 'Current Value (€)',
-                         'Net Return (€)', 'Net Performance (%)', 'Net Performance (%) - Trend', 'Total Cost (€)'
-                         ]]
-
-
-def remove_flat_line(arr):
-    if len(arr) == 0:
-        return None
-    if min(arr) == max(arr):
-        return None
-    return arr
-
-
+# Remove flat trends
 display_df["Net Performance (%) - Trend"] = display_df["Net Performance (%) - Trend"].apply(remove_flat_line)
 
-# Apply Styler to the "Net Performance" columns
-display_df_styled = display_df.style.map(color_net_performance, subset=["Net Performance (%)", "Net Return (€)"])
+# Apply styling
+display_df_styled = display_df.style.map(
+    color_net_performance,
+    subset=["Net Performance (%)", "Net Return (€)"]
+)
 
-# Top badges
-badge_value_color = 'green' if daily_current_value_delta > 0 else 'red' if daily_current_value_delta < 0 else 'gray'
-badge_value_icon = ':material/arrow_upward:' if daily_current_value_delta > 0 else ':material/arrow_downward:' if daily_current_value_delta < 0 else ':material/info:'
-badge_value_text = f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ +{daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta > 0 \
-    else f"Portfolio Value: € {abs(current_portfolio_value):,.2f} (∆ {daily_current_value_delta_per}% | {daily_current_value_delta_eur}) " if daily_current_value_delta < 0 \
-    else f"Portfolio Value: € {abs(current_portfolio_value):,.2f}"
+# ============================================================================
+# UI DISPLAY
+# ============================================================================
+
+# Portfolio value badge
+badge_color, badge_icon, badge_text = format_portfolio_badge(
+    daily_metrics["current_value"],
+    daily_metrics["daily_delta"],
+    daily_metrics["daily_delta_per"]
+)
 
 st.markdown(
-    f":{badge_value_color}-badge[{badge_value_icon} {badge_value_text}]",
-    help="""
-**Portfolio Value:** Shows the current portfolio value and the last daily change (in euros and percentage).
-    """
+    f":{badge_color}-badge[{badge_icon} {badge_text}]",
+    help="**Portfolio Value:** Shows the current portfolio value and the last daily change (in euros and percentage)."
 )
+
+# Calculate table height
+df_height_px = UIConstants.calculate_table_height(len(display_df))
 
 # Show dataframe
 st.dataframe(
     display_df_styled,
     height=df_height_px,
     hide_index=True,
-    row_height=50,
     column_config={
         "Product": st.column_config.TextColumn(
             "Product",
             width="medium",
             pinned=True,
         ),
-
         "Current Allocation %": st.column_config.ProgressColumn(
             "Allocation (%)",
             format="%.1f%%",
