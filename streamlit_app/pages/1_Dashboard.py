@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
-from config import FrontendConfig, APIEndpoints, ColumnMappings
+
 from src.api.client import (
     is_backend_alive,
     portfolio_data_exists,
@@ -22,6 +22,7 @@ from src.components.dashboard_ui import (
 from src.data.transformers import prepare_portfolio_dataframe
 from src.utils.date_helpers import get_date_range
 from src.utils.error_handler import handle_api_error
+from src.utils.log_helpers import read_log_file
 from src.utils.session_state import initialize_session_state
 
 # Config
@@ -123,7 +124,7 @@ def reset_confirm_dialog():
                     log_files=True
                 )
                 st.success(f"✅ {result['message']}")
-                
+
                 # Show details of deleted files
                 deleted = result.get('deleted', {})
                 if any(deleted.values()):
@@ -150,6 +151,34 @@ def refresh_data():
         trigger_portfolio_calculation()
     except Exception as e:
         st.error(f"Error occurred while refreshing data: {e}")
+
+
+@st.dialog("📋 Application Logs", width="large")
+def logs_viewer_dialog():
+    """Modal dialog for viewing application logs."""
+    col1, col2 = st.columns(2)
+
+    with col1:
+        log_type = st.selectbox(
+            "Log Type",
+            options=["app", "scheduler", "all"],
+            format_func=lambda x: {"app": "App Logs", "scheduler": "Scheduler Logs", "all": "All Logs"}.get(x, x),
+            help="Select which log file to display"
+        )
+
+    with col2:
+        max_lines = st.selectbox(
+            "Lines to Display",
+            options=[20, 50, 100, 200],
+            index=1,
+            help="Maximum number of log lines to display"
+        )
+
+    st.divider()
+
+    # Display logs
+    logs_content = read_log_file(log_type, max_lines)
+    st.code(logs_content, language="plaintext")
 
 
 # Startup refresh logic - Only run initial calculation if no data exists
@@ -214,7 +243,6 @@ filtered_df = product_df[
     (product_df['End Date'] >= selected_start_date) & (product_df['End Date'] <= selected_end_date)].sort_values(
     by='End Date')
 
-
 # ---- Chart Section ----
 render_performance_chart(
     filtered_df,
@@ -258,6 +286,10 @@ with st.sidebar:
             st.info(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             st.session_state.startup_refresh = True
             st.rerun()
+
+        if st.button('📋 View Logs', use_container_width=True,
+                     help="View application and scheduler logs"):
+            logs_viewer_dialog()
 
         if st.button('⚠️ Reset Everything', use_container_width=True, type="secondary",
                      help="Deletes all cached files AND your transaction data. Restarts the app from scratch."):
