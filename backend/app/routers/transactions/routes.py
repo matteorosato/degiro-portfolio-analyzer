@@ -58,10 +58,10 @@ async def upload_transactions_csv(file: UploadFile = File(...)):
         try:
             from backend.app.routers.portfolio.services import portfolio_service
             portfolio_service.calc_portfolio()
-            app_logger.info("[TRANSACTIONS-API] Portfolio calculation completed successfully")
+            app_logger.info("[TRANSACTIONS-API] Transactions processed successfully")
             calculation_status = "success"
         except Exception as calc_error:
-            app_logger.error(f"[TRANSACTIONS-API] Portfolio calculation failed: {calc_error}", exc_info=True)
+            app_logger.error(f"[TRANSACTIONS-API] Error when processing transactions: {calc_error}", exc_info=True)
             calculation_status = "failed"
         
         return {

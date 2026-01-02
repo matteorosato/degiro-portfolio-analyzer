@@ -236,26 +236,23 @@ def upload_transactions_file(uploaded_file) -> Optional[Dict[str, Any]]:
 
 def cleanup_files(
     input_files: bool = True,
-    output_files: bool = True,
-    log_files: bool = True
+    output_files: bool = True
 ) -> Dict[str, Any]:
     """Clean up application files via API.
     
     Args:
         input_files: Delete files in input directory
         output_files: Delete files in output directory
-        log_files: Delete files in logs directory
-        
+    
     Returns:
         Response JSON with cleanup results
-        
+    
     Raises:
         requests.RequestException: On API errors
     """
     params = {
         "input_files": input_files,
-        "output_files": output_files,
-        "log_files": log_files
+        "output_files": output_files
     }
     response = _make_api_request("DELETE", "/core/debug/cleanup", params=params)
     return response.json()

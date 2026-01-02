@@ -120,8 +120,7 @@ def reset_confirm_dialog():
                 # Call backend to clean up files
                 result = cleanup_files(
                     input_files=True,
-                    output_files=True,
-                    log_files=True
+                    output_files=True
                 )
                 st.success(f"✅ {result['message']}")
 
