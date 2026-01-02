@@ -214,7 +214,6 @@ filtered_df = product_df[
     (product_df['End Date'] >= selected_start_date) & (product_df['End Date'] <= selected_end_date)].sort_values(
     by='End Date')
 
-# st.subheader(f"{selected_product}")
 
 # ---- Chart Section ----
 render_performance_chart(
@@ -249,18 +248,17 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True,
-                 help="Recalculates your portfolio with current data"):
-        st.session_state.startup_refresh = False
-        with st.spinner("Refreshing data..."):
-            refresh_data(None)
-        st.success(f"Data updated successfully! (Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
-        st.session_state.startup_refresh = True
-        st.rerun()
-
-    st.divider()
-
     with st.expander("🔧 Troubleshooting", expanded=False):
+        if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True,
+                     help="Recalculates your portfolio with current data"):
+            st.session_state.startup_refresh = False
+            with st.spinner("Refreshing data..."):
+                refresh_data()
+            st.success(f"✅ Data updated successfully!")
+            st.info(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            st.session_state.startup_refresh = True
+            st.rerun()
+
         if st.button('⚠️ Reset Everything', use_container_width=True, type="secondary",
                      help="Deletes all cached files AND your transaction data. Restarts the app from scratch."):
             reset_confirm_dialog()
