@@ -112,12 +112,12 @@ def confirm_upload_dialog():
 @st.dialog("Reset Everything")
 def reset_confirm_dialog():
     st.warning("**WARNING: This will delete all portfolio data!**")
-    st.markdown("This action **cannot be undone**. All files (input, output, logs) will be deleted.")
+    st.markdown("This action **cannot be undone**. All files (input, output) will be deleted. Log files will be preserved for troubleshooting.")
 
     if st.button("Yes, Reset All", use_container_width=True, type="primary"):
         with st.spinner("Resetting..."):
             try:
-                # Call backend to clean up all files
+                # Call backend to clean up files
                 result = cleanup_files(
                     input_files=True,
                     output_files=True,
@@ -133,8 +133,6 @@ def reset_confirm_dialog():
                             st.write("**Input files:**", ", ".join(deleted['input_files']))
                         if deleted.get('output_files'):
                             st.write("**Output files:**", ", ".join(deleted['output_files']))
-                        if deleted.get('log_files'):
-                            st.write("**Log files:**", ", ".join(deleted['log_files']))
             except Exception as e:
                 st.error(f"Reset failed: {e}")
 
@@ -169,16 +167,22 @@ def logs_viewer_dialog():
     with col2:
         max_lines = st.selectbox(
             "Lines to Display",
-            options=[20, 50, 100, 200],
-            index=1,
+            options=[50, 100, "All"],
+            index=0,
             help="Maximum number of log lines to display"
         )
 
     st.divider()
 
-    # Display logs
-    logs_content = read_log_file(log_type, max_lines)
-    st.code(logs_content, language="plaintext")
+    # Display logs in descending order (most recent first)
+    if max_lines == "All":
+        logs_content = read_log_file(log_type, 1000000)  # Large number to get all lines
+    else:
+        logs_content = read_log_file(log_type, max_lines)
+    # Reverse lines for descending order
+    logs_lines = logs_content.splitlines()
+    logs_content_desc = "\n".join(reversed(logs_lines))
+    st.code(logs_content_desc, language="plaintext")
 
 
 # Startup refresh logic - Only run initial calculation if no data exists
