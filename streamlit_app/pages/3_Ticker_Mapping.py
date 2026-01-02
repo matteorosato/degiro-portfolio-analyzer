@@ -1,10 +1,9 @@
 import json
 import time
 
-import pandas as pd
 import streamlit as st
 
-from src.api.client import fetch_isin_mapping, save_isin_mapping
+from src.api.client import fetch_isin_mapping, save_isin_mapping, fetch_portfolio_daily, trigger_portfolio_calculation
 from src.data.transformers import prepare_mapping_dataframe
 from src.services.ticker_service import (
     search_ticker,
@@ -43,10 +42,22 @@ def save_mapping(df):
     try:
         response = save_isin_mapping(updated_mapping)
         if response.get("success"):
-            # Signal cache refresh on next page load
+            # Update shared session state so other pages see the change immediately
+            st.session_state.isin_mapping = updated_mapping
             st.session_state.refresh_mapping = True
-            st.cache_data.clear()
-            st.toast(f"✅ Mapping saved!")
+            # Invalidate portfolio_df and clear cache so dashboard reloads with new mapping
+            if "portfolio_df" in st.session_state:
+                del st.session_state["portfolio_df"]
+            # Clear the cache for fetch_portfolio_daily to force re-fetch from API
+            fetch_portfolio_daily.clear()
+
+            # Force backend to recalculate portfolio with new mapping
+            st.toast("💾 Mapping saved! Updating portfolio with new mapping...")
+            try:
+                trigger_portfolio_calculation()
+                st.toast("✅ Portfolio updated with new mapping!")
+            except Exception as e:
+                st.warning(f"Portfolio update queued in background. Error: {e}")
         else:
             st.error("Failed to save mapping")
     except Exception as e:

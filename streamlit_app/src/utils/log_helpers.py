@@ -32,33 +32,30 @@ def read_log_file(log_type: str = "app", max_lines: int = 50) -> str:
     Returns:
         String containing log lines, or error message if file not found
     """
+    import requests
+    from config import FrontendConfig
+    # Map log_type to API endpoint (includes /core prefix)
+    endpoints = {
+        "app": "/core/logs/app",
+        "scheduler": "/core/logs/scheduler"
+    }
     if log_type == "all":
-        # Combine both logs
         app_logs = read_log_file("app", max_lines)
         scheduler_logs = read_log_file("scheduler", max_lines)
         return f"=== APP LOGS ===\n{app_logs}\n\n=== SCHEDULER LOGS ===\n{scheduler_logs}"
 
-    log_path = get_log_file_path(log_type)
-
-    if log_path is None or not log_path.exists():
-        return f"📭 Log file not found: {log_path}"
-
+    endpoint = endpoints.get(log_type)
+    if not endpoint:
+        return f"❌ Invalid log type: {log_type}"
     try:
-        with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()
-
-        # If max_lines is very large (simulate 'All'), return all
-        if max_lines is None or max_lines >= 1000000:
-            return ''.join(lines)
-
-        # Return last N lines
-        if len(lines) <= max_lines:
-            return ''.join(lines)
-
-        return ''.join(lines[-max_lines:])
-
+        url = FrontendConfig.get_api_url(endpoint)
+        params = {"lines": max_lines}
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        lines = resp.json()
+        return "".join(lines) if isinstance(lines, list) else str(lines)
     except Exception as e:
-        return f"❌ Error reading log file: {str(e)}"
+        return f"❌ Error reading log file via API: {str(e)}"
 
 
 def get_log_files_info() -> Tuple[bool, bool]:

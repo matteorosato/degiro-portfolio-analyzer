@@ -124,10 +124,9 @@ def fetch_transactions() -> pd.DataFrame:
     return pd.DataFrame(response.json())
 
 
-@st.cache_data(ttl=UIConstants.CACHE_TTL_LONG)
 def fetch_isin_mapping() -> Dict[str, Any]:
     """Fetch ISIN to ticker mapping from API.
-    
+
     Returns:
         Dictionary with ISIN mapping
         
