@@ -1,13 +1,15 @@
 """Business logic for transactions domain."""
 import json
 import warnings
+import shutil
+import os
 from pathlib import Path
 from typing import Optional, Dict
 
 import pandas as pd
 import yfinance as yf
 
-from backend.app.config import config
+from backend.app.config import config, FilePaths
 from backend.app.shared.logger import app_logger
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
@@ -421,6 +423,71 @@ class TransactionService:
         except Exception as e:
             app_logger.error(f"[TRANSACTIONS] Error preparing data: {e}", exc_info=True)
             return pd.DataFrame()
+
+    def upload_transactions_and_recalculate(self, csv_file_path: str) -> Dict:
+        """
+        Upload a new transactions CSV file and recalculate the portfolio.
+        
+        This method orchestrates the complete workflow:
+        1. Save the new CSV file
+        2. Delete old portfolio output files to force recalculation
+        3. Recalculate the portfolio with the new data
+        
+        Args:
+            csv_file_path: Path to the uploaded CSV file
+            
+        Returns:
+            Dictionary with status and details
+        """
+        try:
+            # Step 1: Save the uploaded file to the configured location
+            from backend.app.config import Directories
+            Directories.ensure_exists(Directories.INPUT)
+            
+            with open(csv_file_path, 'rb') as src:
+                with open(config.TRANSACTION_CSV, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+            
+            app_logger.info(f"[TRANSACTIONS] CSV file saved: {config.TRANSACTION_CSV}")
+            
+            # Step 2: Load and process transactions to get count
+            df = self.get_all_transactions()
+            transactions_count = len(df)
+            
+            # Step 3: Delete old portfolio output files to force recalculation
+            output_files_to_delete = [
+                FilePaths.PORTFOLIO_DAILY,
+                FilePaths.STOCK_PRICES
+            ]
+            
+            for file_path in output_files_to_delete:
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        app_logger.info(f"[TRANSACTIONS] Deleted old output file: {file_path}")
+                except Exception as delete_error:
+                    app_logger.warning(f"[TRANSACTIONS] Failed to delete {file_path}: {delete_error}")
+            
+            # Step 4: Recalculate portfolio with new transactions
+            try:
+                from backend.app.routers.portfolio.services import portfolio_service
+                portfolio_service.calc_portfolio()
+                app_logger.info("[TRANSACTIONS] Portfolio recalculated successfully")
+                portfolio_status = "success"
+            except Exception as calc_error:
+                app_logger.error(f"[TRANSACTIONS] Error recalculating portfolio: {calc_error}", exc_info=True)
+                portfolio_status = "failed"
+            
+            return {
+                "status": "success",
+                "processed_transactions": transactions_count,
+                "portfolio_calculation": portfolio_status,
+                "message": f"Processed {transactions_count} transactions successfully"
+            }
+            
+        except Exception as e:
+            app_logger.error(f"[TRANSACTIONS] Error in upload_transactions_and_recalculate: {e}", exc_info=True)
+            raise
 
 
 # Singleton instance

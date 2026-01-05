@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from typing import List, Optional
 from datetime import date
 import shutil
+import os
+import tempfile
 
 from backend.app.shared.logger import app_logger
 from backend.app.core.exceptions import TransactionNotFoundError
@@ -23,7 +25,8 @@ async def upload_transactions_csv(file: UploadFile = File(...)):
     Upload and save transactions CSV file.
     
     The file will be saved to the configured input directory and will
-    replace any existing transactions file.
+    replace any existing transactions file. The portfolio will be completely
+    recalculated with the new data.
     
     Args:
         file: The CSV file to upload (multipart/form-data)
@@ -39,38 +42,29 @@ async def upload_transactions_csv(file: UploadFile = File(...)):
                 detail="Invalid file type. Only CSV files are allowed."
             )
         
-        # Ensure input directory exists
-        Directories.ensure_exists(Directories.INPUT)
+        # Save the uploaded file to a temporary location
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
+            tmp_path = tmp.name
+            shutil.copyfileobj(file.file, tmp)
         
-        # Save the uploaded file
-        file_path = FilePaths.TRANSACTION_CSV
-        with open(file_path, 'wb') as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        app_logger.info(f"[TRANSACTIONS-API] CSV file uploaded successfully: {file.filename}")
-        
-        # Process the uploaded file
-        df = transaction_service.get_all_transactions()
-        
-        app_logger.info(f"[TRANSACTIONS-API] Processing {len(df)} transactions...")
-        
-        # Calculate portfolio with the new transactions
         try:
-            from backend.app.routers.portfolio.services import portfolio_service
-            portfolio_service.calc_portfolio()
-            app_logger.info("[TRANSACTIONS-API] Transactions processed successfully")
-            calculation_status = "success"
-        except Exception as calc_error:
-            app_logger.error(f"[TRANSACTIONS-API] Error when processing transactions: {calc_error}", exc_info=True)
-            calculation_status = "failed"
-        
-        return {
-            "status": "success",
-            "message": f"File '{file.filename}' uploaded and processed successfully",
-            "file_path": file_path,
-            "processed_transactions": len(df),
-            "portfolio_calculation": calculation_status
-        }
+            # Use the transaction service to handle the complete workflow:
+            # 1. Save file to configured location
+            # 2. Delete old output files
+            # 3. Recalculate portfolio
+            result = transaction_service.upload_transactions_and_recalculate(tmp_path)
+            
+            return {
+                "status": result["status"],
+                "message": f"File '{file.filename}' uploaded and processed successfully",
+                "processed_transactions": result["processed_transactions"],
+                "portfolio_calculation": result["portfolio_calculation"]
+            }
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
         
     except HTTPException:
         raise

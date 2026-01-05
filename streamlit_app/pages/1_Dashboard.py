@@ -94,14 +94,19 @@ def confirm_upload_dialog():
             st.rerun()
 
     if st.session_state.get("processing"):
-        with st.spinner("Processing and recalculating portfolio..."):
+        with st.spinner("Processing file and recalculating portfolio..."):
             result = upload_transactions_file(st.session_state.pending_file_upload)
 
         if result and result.get("status") == "success":
-            st.success(f"✅ {result['message']}")
+            st.toast(f"✅ {result['message']}")
+            # Invalidate cache and session state to force re-fetch with new data
+            if "portfolio_df" in st.session_state:
+                del st.session_state["portfolio_df"]
+            fetch_portfolio_daily.clear()
             st.session_state.processing = False
             st.session_state.pending_file_upload = None
             st.session_state.startup_refresh = False
+            st.session_state.force_refresh_portfolio = True
             st.session_state.upload_count += 1
             st.rerun()
         else:
@@ -126,7 +131,7 @@ def reset_confirm_dialog():
                     input_files=True,
                     output_files=True
                 )
-                st.success(f"✅ {result['message']}")
+                st.toast(f"✅ {result['message']}")
 
                 # Show details of deleted files
                 deleted = result.get('deleted', {})
@@ -150,6 +155,7 @@ def refresh_data():
     """Trigger portfolio calculation via API."""
     try:
         trigger_portfolio_calculation()
+        st.toast("Portfolio recalculation completed.")
     except Exception as e:
         st.error(f"Error occurred while refreshing data: {e}")
 
