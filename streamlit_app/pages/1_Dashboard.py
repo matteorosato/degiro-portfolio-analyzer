@@ -258,13 +258,37 @@ min_date = df['End Date'].min().to_pydatetime()
 # Date selection
 date_selection = st.segmented_control(
     "Date Range",
-    options=["1Y", "3M", "1M", "1W", "YTD", "Last year", "Last month", "All time"],
+    options=["1Y", "3M", "1M", "YTD", "Last year", "Last month", "Custom", "All time"],
     default="All time",
     selection_mode="single",
 )
 
-# Use date helpers for date range calculation
-selected_start_date, selected_end_date = get_date_range(date_selection, max_date, min_date)
+# Custom date selection
+if date_selection == "Custom":
+    col1, col2 = st.columns(2)
+    with col1:
+        custom_start_date = st.date_input(
+            "Start Date",
+            value=min_date.date(),
+            min_value=min_date.date(),
+            max_value=max_date.date(),
+            key="custom_start_date"
+        )
+    with col2:
+        custom_end_date = st.date_input(
+            "End Date",
+            value=max_date.date(),
+            min_value=min_date.date(),
+            max_value=max_date.date(),
+            key="custom_end_date"
+        )
+    
+    # Convert to datetime
+    selected_start_date = datetime.combine(custom_start_date, datetime.min.time())
+    selected_end_date = datetime.combine(custom_end_date, datetime.max.time())
+else:
+    # Use date helpers for date range calculation
+    selected_start_date, selected_end_date = get_date_range(date_selection, max_date, min_date)
 
 # Filter data by date range
 filtered_df = product_df[
@@ -284,7 +308,7 @@ render_performance_chart(
 
 # ---- Portfolio Summary Section ----
 if not filtered_df.empty:
-    render_portfolio_summary(filtered_df, selected_start_date, selected_end_date)
+    render_portfolio_summary(filtered_df, selected_start_date, selected_end_date, date_selection)
     st.divider()
 
     # ---- Portfolio Composition Section ----

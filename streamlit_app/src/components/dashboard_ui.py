@@ -140,7 +140,8 @@ def render_performance_chart(
 def render_portfolio_summary(
     filtered_df: pd.DataFrame,
     selected_start_date: datetime,
-    selected_end_date: datetime
+    selected_end_date: datetime,
+    date_selection: str = "All time"
 ) -> None:
     """Render portfolio summary metrics section.
     
@@ -148,6 +149,7 @@ def render_portfolio_summary(
         filtered_df: Filtered portfolio data
         selected_start_date: Period start date
         selected_end_date: Period end date
+        date_selection: Selected date range option
     """
     # Format the date range for the title
     period_start_str = selected_start_date.strftime('%Y-%m-%d')
@@ -158,14 +160,38 @@ def render_portfolio_summary(
         f"({(selected_end_date - selected_start_date).days} days)"
     )
 
-    # Get values at the end of the selected period
-    period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
-    
-    # Use the Money Weighted Return from backend calculation
-    period_return_euro = filtered_df.iloc[-1].get("Current Money Weighted Return (€)", 0)
-    
-    # Calculate Period Performance % from the backend calculated percentage
-    period_performance_pct = filtered_df.iloc[-1].get("Current Performance (%)", 0)
+    # For "All time" period, use backend-calculated values
+    # For custom periods, calculate locally based on filtered data
+    if date_selection == "All time" and len(filtered_df) > 0:
+        # Use backend-calculated values for full period
+        period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
+        period_return_euro = filtered_df.iloc[-1].get("Current Money Weighted Return (€)", 0)
+        period_performance_pct = filtered_df.iloc[-1].get("Net Performance (%)", 0)
+    else:
+        # Calculate locally for custom periods
+        if len(filtered_df) > 0:
+            period_start_value = filtered_df.iloc[0].get("Current Value (€)", 0)
+            period_start_cost = filtered_df.iloc[0].get("Total Cost (€)", 0)
+            period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
+            period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
+            
+            # Use net return difference for more accurate period calculation
+            net_return_start = filtered_df.iloc[0].get('Net Return (€)', 0)
+            net_return_end = filtered_df.iloc[-1].get('Net Return (€)', 0)
+            period_return_euro = net_return_end - net_return_start
+            
+            # Calculate net cash flows during the period (investments/withdrawals)
+            net_cash_flows_period = period_end_cost - period_start_cost
+            
+            # Calculate Period Performance % using net return over initial cost (like backend)
+            if period_start_cost != 0:
+                period_performance_pct = (period_return_euro / period_start_cost) * 100
+            else:
+                period_performance_pct = 0
+        else:
+            period_end_value = 0
+            period_return_euro = 0
+            period_performance_pct = 0
 
     # Display metrics
     col1, col2, col3 = st.columns(3)
