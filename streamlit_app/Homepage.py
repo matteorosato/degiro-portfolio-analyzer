@@ -47,6 +47,10 @@ st.markdown(
     - [Project README](https://github.com/matteorosato/degiro-portfolio-analyzer)
     - [API Documentation](http://localhost:8000/docs)
     - [User Guide](docs/user-guide.md)
+
+     ### 🐞 Report a Bug
+
+    - [Open an Issue on GitHub](https://github.com/matteorosato/degiro-portfolio-analyzer/issues)
     
     ### 🛠️ Technical Stack
     

@@ -23,5 +23,4 @@ pytest-asyncio==0.24.0
 httpx==0.28.1
 
 # Code Quality (optional)
-ruff==0.8.5
 black==24.12.0
