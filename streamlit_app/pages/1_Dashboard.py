@@ -228,10 +228,22 @@ if df.empty:
         st.rerun()
     st.stop()
 
-# Move the file uploader and refresh button to the sidebar
+# Sidebar: product/metric selectors
 with st.sidebar:
     selected_product, selected_compare_product = render_product_selector(df)
     selected_metric = render_metric_selector(df)
+
+# Sidebar: divider and upload button
+with st.sidebar:
+    st.divider()
+    with st.expander("📤 Upload Transactions File", expanded=False):
+        uploaded_file = st.file_uploader("Upload New Transactions CSV", type=["csv"],
+                                         key=f"uploader_{st.session_state.upload_count}")
+
+        if uploaded_file is not None:
+            st.session_state.pending_file_upload = uploaded_file
+            confirm_upload_dialog()
+
 
 # Filter on product
 product_df = df[df['Product'] == selected_product]
@@ -281,17 +293,8 @@ if not filtered_df.empty:
 else:
     st.write("No data available for the selected product and date range.")
 
-# File upload in sidebar
+# Sidebar: troubleshooting section
 with st.sidebar:
-    uploaded_file = st.file_uploader("Upload New Transactions CSV", type=["csv"],
-                                     key=f"uploader_{st.session_state.upload_count}")
-
-    if uploaded_file is not None:
-        st.session_state.pending_file_upload = uploaded_file
-        confirm_upload_dialog()
-
-    st.divider()
-
     with st.expander("🔧 Troubleshooting", expanded=False):
         if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True,
                      help="Recalculates your portfolio with current data"):
