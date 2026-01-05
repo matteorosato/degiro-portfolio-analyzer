@@ -226,6 +226,8 @@ class PortfolioAnalyzer:
                     
                     # Calculate gain or loss
                     realized_return += abs(quantity) * (transaction_price - avg_cost_stock) + transaction_costs
+            else:
+                raise(ValueError(f"Unknown transaction action: {action}"))
 
         # Calculate current return for remaining holdings
         if quantity_held > 0:
@@ -238,12 +240,14 @@ class PortfolioAnalyzer:
 
             if end_price is None:
                 end_price = 0
-
+            # 'current_return' represents the unrealized gain/loss on positions still held
+            # It is the difference between the current market value and the cost basis of open positions
             current_return = (quantity_held * end_price) - (quantity_held * avg_cost)
         else:
             current_return = 0
 
-        # Net return and current value of the stock
+        # 'net_return' represents the total return including both realized and unrealized gains/losses
+        # It combines the current return (unrealized) with realized returns from closed positions
         net_return = current_return + realized_return
         current_value = (quantity_held * avg_cost) + current_return
         
@@ -252,8 +256,9 @@ class PortfolioAnalyzer:
             (current_return / purchase_cost) * 100
             if (current_return and purchase_cost) else 0
         )
+        # Calculate net performance percentage (ROI) including realized and unrealized returns
         net_performance_percentage = (
-            ((current_return + realized_return) / purchase_cost) * 100 
+            (net_return / purchase_cost) * 100 
             if purchase_cost else 0
         )
 
@@ -319,6 +324,7 @@ class PortfolioAnalyzer:
             ((current_return) / purchase_cost) * 100 
             if (current_return and purchase_cost) else 0
         )
+        # Calculate net performance percentage (ROI) including realized and unrealized returns
         net_performance_percentage = (
             ((current_return + realized_return) / purchase_cost) * 100 
             if purchase_cost else 0
