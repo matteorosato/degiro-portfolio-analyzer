@@ -158,24 +158,14 @@ def render_portfolio_summary(
         f"({(selected_end_date - selected_start_date).days} days)"
     )
 
-    # Get values at the start and end of the selected period
-    period_start_value = filtered_df.iloc[0].get("Current Value (€)", 0) if len(filtered_df) > 0 else 0
-    period_start_cost = filtered_df.iloc[0].get("Total Cost (€)", 0) if len(filtered_df) > 0 else 0
-
+    # Get values at the end of the selected period
     period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
-    period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
-
-    # Calculate net cash flows during the period
-    net_cash_flows_period = period_end_cost - period_start_cost
-
-    # Calculate Period Return in € considering cash flows
-    period_return_euro = period_end_value - period_start_value - net_cash_flows_period
-
-    # Calculate Period Performance %
-    if period_start_value + net_cash_flows_period != 0:
-        period_performance_pct = (period_return_euro / (period_start_value + net_cash_flows_period)) * 100
-    else:
-        period_performance_pct = 0
+    
+    # Use the Money Weighted Return from backend calculation
+    period_return_euro = filtered_df.iloc[-1].get("Current Money Weighted Return (€)", 0)
+    
+    # Calculate Period Performance % from the backend calculated percentage
+    period_performance_pct = filtered_df.iloc[-1].get("Current Performance (%)", 0)
 
     # Display metrics
     col1, col2, col3 = st.columns(3)
