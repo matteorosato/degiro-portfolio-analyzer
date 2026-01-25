@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 from unittest.mock import Mock, patch, mock_open
 from backend.app.routers.portfolio.analyzer import PortfolioAnalyzer
+from backend.app.routers.portfolio.exceptions import InvalidTransactionError
 
 
 class TestPortfolioAnalyzer:
@@ -33,6 +34,17 @@ class TestPortfolioAnalyzer:
         analyzer = PortfolioAnalyzer(sample_transactions)
         assert isinstance(analyzer.transactions, pd.DataFrame)
         assert len(analyzer.transactions) == 3
+        assert analyzer._isin_mapping is None  # Cache should be empty initially
+    
+    def test_clear_cache(self, analyzer):
+        """Test clearing the ISIN mapping cache."""
+        # Set a dummy cache
+        analyzer._isin_mapping = {"test": "data"}
+        assert analyzer._isin_mapping is not None
+        
+        # Clear and verify
+        analyzer.clear_cache()
+        assert analyzer._isin_mapping is None
     
     @patch('yfinance.download')
     def test_get_price_at_date_single_ticker(self, mock_yf, analyzer):

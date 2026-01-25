@@ -1,6 +1,7 @@
 """Portfolio service - main calculation and data management logic."""
 import os
 from datetime import datetime, timedelta
+from typing import Optional, List
 import pandas as pd
 import json
 import warnings
@@ -8,6 +9,16 @@ import time
 from backend.app.shared.logger import app_logger
 from backend.app.routers.transactions.services import transaction_service
 from backend.app.routers.portfolio.analyzer import PortfolioAnalyzer
+from backend.app.routers.portfolio.currency_converter import CurrencyConverter
+from backend.app.routers.portfolio.constants import (
+    WEEKEND_START_DAY,
+    DAYS_TO_REFRESH,
+    DEFAULT_CURRENCY
+)
+from backend.app.routers.portfolio.exceptions import (
+    InvalidDateRangeError,
+    InsufficientDataError
+)
 from backend.app.config import config
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
@@ -16,17 +27,33 @@ warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning
 class PortfolioService:
     """Service for portfolio calculation and management."""
     
-    def calc_portfolio(self) -> None:
-        """Calculate portfolio performance for all days from first transaction to today.
+    def __init__(self):
+        """Initialize portfolio service with currency converter."""
+        self.currency_converter = CurrencyConverter(target_currency=DEFAULT_CURRENCY)
+    
+    def calc_portfolio(
+        self, 
+        custom_start_date: Optional[str] = None,
+        custom_end_date: Optional[str] = None,
+        tickers: Optional[List[str]] = None
+    ) -> None:
+        """Calculate portfolio performance for specified date range.
         
         This method:
         1. Loads transaction data
         2. Fetches historical stock prices
         3. Converts all prices to EUR
         4. Calculates daily portfolio performance
-        5. Saves results to Parquet files (daily and monthly)
+        5. Saves results to Parquet files
+        
+        Args:
+            custom_start_date: Optional custom start date (YYYY-MM-DD), defaults to first transaction
+            custom_end_date: Optional custom end date (YYYY-MM-DD), defaults to today
+            tickers: Optional list of tickers to calculate, defaults to all
         
         Raises:
+            InvalidDateRangeError: If date range is invalid
+            InsufficientDataError: If no transactions found
             Exception: If portfolio calculation fails
         """
         app_logger.info("[PORTFOLIO-CALC] Starting portfolio calculation...")
@@ -45,8 +72,7 @@ class PortfolioService:
             analyzer = PortfolioAnalyzer(transactions_df)
 
             if transactions_df.empty:
-                app_logger.warning("[PORTFOLIO-CALC] No transactions found. Skipping portfolio calculation.")
-                return
+                raise InsufficientDataError("No transactions found. Cannot calculate portfolio.")
             
             app_logger.info("[PORTFOLIO-CALC] Retrieving portfolio data...")
             
@@ -55,73 +81,91 @@ class PortfolioService:
                 transactions_df["Stock"].notna() & (transactions_df["Stock"] != '')
             ]
             if transactions.empty:
-                app_logger.warning(
-                    "[PORTFOLIO-CALC] No valid transactions with a stock ticker. Skipping portfolio calculation."
-                )
-                return
+                raise InsufficientDataError("No valid transactions with a stock ticker.")
             
             transactions["Date"] = pd.to_datetime(transactions["Date"])
-            start_date = transactions['Date'].min()
+            
+            # Determine date range
+            first_transaction_date = transactions['Date'].min()
             today = datetime.today()
-            end_dates = pd.date_range(start=start_date, end=today, freq='D')[1:]  # Exclude the start_date
+            
+            if custom_start_date:
+                start_date = datetime.strptime(custom_start_date, '%Y-%m-%d')
+                if start_date < first_transaction_date:
+                    app_logger.warning(
+                        f"[PORTFOLIO-CALC] Custom start date {custom_start_date} is before first transaction "
+                        f"{first_transaction_date.strftime('%Y-%m-%d')}, using first transaction date."
+                    )
+                    start_date = first_transaction_date
+            else:
+                start_date = first_transaction_date
+            
+            if custom_end_date:
+                end_date = datetime.strptime(custom_end_date, '%Y-%m-%d')
+                if end_date > today:
+                    app_logger.warning(
+                        f"[PORTFOLIO-CALC] Custom end date {custom_end_date} is in the future, using today."
+                    )
+                    end_date = today
+                if end_date < start_date:
+                    raise InvalidDateRangeError(
+                        f"End date {custom_end_date} cannot be before start date {start_date.strftime('%Y-%m-%d')}"
+                    )
+            else:
+                end_date = today
+            
+            end_dates = pd.date_range(start=start_date, end=end_date, freq='D')[1:]  # Exclude the start_date
 
             app_logger.info(
                 f"[PORTFOLIO-CALC] Processing portfolio performance from "
-                f"{start_date.strftime('%Y-%m-%d')} to {today.strftime('%Y-%m-%d')}"
+                f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
             )
 
             # Initialize an empty list to store portfolio data for each day
             portfolio_results_list = []
 
-            # Get recent stock price data for new end_dates
-            stock_list = transactions["Stock"].unique().tolist()  # All stocks
+            # Get stock list (filter by tickers if specified)
+            all_stocks = transactions["Stock"].unique().tolist()
+            if tickers:
+                stock_list = [ticker for ticker in tickers if ticker in all_stocks]
+                if not stock_list:
+                    raise InsufficientDataError(
+                        f"None of the specified tickers {tickers} found in transactions."
+                    )
+                app_logger.info(f"[PORTFOLIO-CALC] Filtering to {len(stock_list)} specified tickers")
+            else:
+                stock_list = all_stocks
 
-            yf_start_date = start_date if len(end_dates) > 30 else (today - timedelta(days=30))
+            yf_start_date = start_date if len(end_dates) > 30 else (end_date - timedelta(days=30))
             yf_stock_price_data = analyzer.get_price_at_date(
                 stock_list, 
                 yf_start_date.strftime('%Y-%m-%d'), 
-                (today + timedelta(days=1)).strftime('%Y-%m-%d')
+                (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
             )
         
-            # Update stock prices to EUR
+            # Update stock prices to EUR using CurrencyConverter
             # Remove duplicates and create ticker-to-currency dict
             ticker_currency_dict = transactions.drop_duplicates(subset=['Stock', 'Price_Currency'])\
                                             .set_index('Stock')['Price_Currency'].to_dict()
 
-            # Group tickers by currency (excluding EUR)
-            currency_ticker_map = {}
-            for ticker, currency in ticker_currency_dict.items():
-                if currency != 'EUR':
-                    currency_ticker_map.setdefault(currency, []).append(ticker)
-
-            # Fetch FX rates once per currency
-            fx_rates_by_currency = {}
-            for currency in currency_ticker_map:
-                fx_rates_by_currency[currency] = analyzer.get_fx_rate(
-                    currency, 'EUR',
-                    yf_start_date.strftime('%Y-%m-%d'),
-                    (today + timedelta(days=1)).strftime('%Y-%m-%d')
-                )
-
-            # Apply FX rates to stock prices
-            for currency, tickers in currency_ticker_map.items():
-                fx_rate = fx_rates_by_currency.get(currency)
-                if fx_rate is None:
-                    continue
-                for ticker in tickers:
-                    prices = yf_stock_price_data.get(ticker, {})
-                    for date, price in prices.items():
-                        prices[date] = price * fx_rate.get(date, 1)
+            # Convert prices to EUR
+            app_logger.info("[PORTFOLIO-CALC] Converting stock prices to EUR...")
+            yf_stock_price_data = self.currency_converter.convert_stock_prices_to_target_currency(
+                yf_stock_price_data,
+                ticker_currency_dict,
+                yf_start_date.strftime('%Y-%m-%d'),
+                (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
+            )
             
             # Load existing results from Parquet file
             try:
                 portfolio_results_df = pd.read_parquet(config.PORTFOLIO_DAILY)
                 app_logger.info("[PORTFOLIO-CALC] Loaded portfolio_performance_daily from Parquet")
 
-                # Remove last 2 days to force refresh (get end of day data)
-                last_2_days = sorted(portfolio_results_df['end_date'].unique())[-2:]
+                # Remove last N days to force refresh (get end of day data)
+                last_n_days = sorted(portfolio_results_df['end_date'].unique())[-DAYS_TO_REFRESH:]
                 portfolio_results_df = portfolio_results_df[
-                    ~portfolio_results_df['end_date'].isin(last_2_days)
+                    ~portfolio_results_df['end_date'].isin(last_n_days)
                 ]
 
             except Exception as e:
@@ -133,7 +177,9 @@ class PortfolioService:
                             'avg_cost', 'total_cost', 'transaction_costs', 'current_value', 
                             'current_money_weighted_return', 'realized_return', 
                             'net_return', 'current_performance_percentage', 
-                            'net_performance_percentage']
+                            'net_performance_percentage', 'total_sales_proceeds',
+                            'total_sales_quantity', 'avg_sale_price', 'total_bought_quantity',
+                            'avg_buy_price']
                 )
             
             # Load stock prices from Parquet file
@@ -172,7 +218,7 @@ class PortfolioService:
                     end_date_str = end_date.strftime('%Y-%m-%d')
 
                     # Skip weekends (Saturday and Sunday)
-                    if end_date.weekday() >= 5:
+                    if end_date.weekday() >= WEEKEND_START_DAY:
                         continue  # Skip this iteration if it's a weekend
                     
                     # Check if the result for this end date already exists in the DataFrame
@@ -256,24 +302,12 @@ class PortfolioService:
             portfolio_results_df.to_parquet(config.PORTFOLIO_DAILY, index=False)
 
             # Stock prices
-            stock_prices_records = []
-            for ticker, date_prices in stock_prices_dict.items():
-                currency = ticker_currency_dict.get(ticker, 'EUR')  # Default EUR if missing
-                fx_rate_data = fx_rates_by_currency.get(currency, {}) if currency != 'EUR' else {}
-
-                currency_pair = f"{currency}-EUR" if currency != 'EUR' else "EUR-EUR"
-
-                for date, price in date_prices.items():
-                    # FX rate for the date if not EUR, else 1
-                    fx_rate = fx_rate_data.get(date, 1) if currency != 'EUR' else 1
-
-                    stock_prices_records.append({
-                        "ticker": ticker,
-                        "date": date,
-                        "price": price if price is not None else 0,
-                        "fx_rate": fx_rate,
-                        "currency_pair": currency_pair
-                    })
+            # Get FX rates metadata using CurrencyConverter
+            stock_prices_records = self.currency_converter.get_fx_rates_metadata(
+                stock_prices_dict,
+                ticker_currency_dict,
+                self.currency_converter._fx_rates_cache
+            )
 
             stock_prices_df = pd.DataFrame(stock_prices_records)
             stock_prices_df = stock_prices_df.dropna(subset=['price'])

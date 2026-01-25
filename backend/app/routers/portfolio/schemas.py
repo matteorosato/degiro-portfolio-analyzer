@@ -1,6 +1,6 @@
 """Pydantic schemas for portfolio domain."""
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 
 
@@ -20,7 +20,22 @@ class PortfolioHoldingResponse(BaseModel):
     realized_return: float = Field(..., description="Realized gains/losses")
     net_return: float = Field(..., description="Total return (realized + unrealized)")
     current_performance_percentage: float = Field(..., description="Current performance %")
-    net_performance_percentage: float = Field(..., description="Net performance %")
+    net_performance_percentage: float = Field(..., description="Net performance % (ROI)")
+    
+    # Sales tracking fields
+    total_sales_proceeds: float = Field(default=0.0, description="Total amount received from sales")
+    total_sales_quantity: int = Field(default=0, description="Total shares sold")
+    avg_sale_price: float = Field(default=0.0, description="Average sale price per share")
+    total_bought_quantity: int = Field(default=0, description="Total shares purchased")
+    avg_buy_price: float = Field(default=0.0, description="Average purchase price per share")
+
+
+class DateRangeRequest(BaseModel):
+    """Request schema for custom date range calculations."""
+    
+    start_date: str = Field(..., description="Start date in YYYY-MM-DD format")
+    end_date: str = Field(..., description="End date in YYYY-MM-DD format")
+    tickers: Optional[List[str]] = Field(None, description="Optional list of tickers to calculate (null = all)")
 
 
 class RefreshStatusResponse(BaseModel):

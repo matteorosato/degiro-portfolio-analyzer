@@ -8,13 +8,15 @@ import os
 
 from backend.app.routers.portfolio.schemas import (
     CalculationResponse,
-    RefreshStatusResponse
+    RefreshStatusResponse,
+    DateRangeRequest
 )
 from backend.app.routers.portfolio.services import portfolio_service
 from backend.app.routers.portfolio.tasks import background_refresh_task
 from backend.app.shared.logger import app_logger
 from backend.app.shared.refresh_status import get_refresh_status, is_refresh_running
 from backend.app.core.exceptions import RefreshInProgressError, PortfolioCalculationError
+from backend.app.routers.portfolio.exceptions import InvalidDateRangeError, InsufficientDataError
 from backend.app.config import FilePaths
 
 router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
@@ -25,7 +27,7 @@ async def calculate_portfolio():
     """Trigger synchronous portfolio calculation.
     
     This endpoint calculates the portfolio performance immediately and blocks until complete.
-    Use the /refresh endpoint for background processing.
+    Use the /refresh endpoint for background processing or /calculate-range for custom date ranges.
     
     Returns:
         CalculationResponse: Success message with status
@@ -42,8 +44,55 @@ async def calculate_portfolio():
             message="Portfolio calculation completed successfully",
             success=True
         )
+    except (InvalidDateRangeError, InsufficientDataError) as e:
+        app_logger.error(f"[API] Portfolio calculation failed: {e}")
+        raise PortfolioCalculationError(str(e))
     except Exception as e:
         app_logger.error(f"[API] Portfolio calculation failed: {e}", exc_info=True)
+        raise PortfolioCalculationError(f"Portfolio calculation failed: {str(e)}")
+
+
+@router.post("/calculate-range", response_model=CalculationResponse)
+async def calculate_portfolio_range(request: DateRangeRequest = Body(...)):
+    """Calculate portfolio performance for a custom date range.
+    
+    This endpoint allows you to calculate performance for specific date ranges and/or specific tickers.
+    The calculation is performed synchronously and results are saved to the database.
+    
+    Args:
+        request: DateRangeRequest containing start_date, end_date, and optional tickers list
+    
+    Returns:
+        CalculationResponse: Success message with status
+        
+    Raises:
+        PortfolioCalculationError: If calculation fails
+        InvalidDateRangeError: If date range is invalid
+    """
+    try:
+        app_logger.info(
+            f"[API] Portfolio range calculation requested: {request.start_date} to {request.end_date}"
+        )
+        
+        portfolio_service.calc_portfolio(
+            custom_start_date=request.start_date,
+            custom_end_date=request.end_date,
+            tickers=request.tickers
+        )
+        
+        app_logger.info("[API] Portfolio range calculation completed successfully")
+        
+        ticker_info = f" for {len(request.tickers)} tickers" if request.tickers else ""
+        
+        return CalculationResponse(
+            message=f"Portfolio calculation completed for {request.start_date} to {request.end_date}{ticker_info}",
+            success=True
+        )
+    except (InvalidDateRangeError, InsufficientDataError) as e:
+        app_logger.error(f"[API] Portfolio range calculation failed: {e}")
+        raise PortfolioCalculationError(str(e))
+    except Exception as e:
+        app_logger.error(f"[API] Portfolio range calculation failed: {e}", exc_info=True)
         raise PortfolioCalculationError(f"Portfolio calculation failed: {str(e)}")
 
 

@@ -4,6 +4,10 @@ import pandas as pd
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 from backend.app.routers.portfolio.services import PortfolioService
+from backend.app.routers.portfolio.exceptions import (
+    InvalidDateRangeError,
+    InsufficientDataError
+)
 
 
 class TestPortfolioService:
@@ -78,7 +82,12 @@ class TestPortfolioService:
                 'realized_return': 0.0,
                 'net_return': 75.0,
                 'current_performance_percentage': 5.0,
-                'net_performance_percentage': 5.0
+                'net_performance_percentage': 5.0,
+                'total_sales_proceeds': 0.0,
+                'total_sales_quantity': 0,
+                'avg_sale_price': 0.0,
+                'total_bought_quantity': 15,
+                'avg_buy_price': 100.0
             },
             'portfolio': {
                 'product': 'Full portfolio',
@@ -94,7 +103,12 @@ class TestPortfolioService:
                 'realized_return': 0.0,
                 'net_return': 75.0,
                 'current_performance_percentage': 5.0,
-                'net_performance_percentage': 5.0
+                'net_performance_percentage': 5.0,
+                'total_sales_proceeds': 0.0,
+                'total_sales_quantity': 0,
+                'avg_sale_price': 0.0,
+                'total_bought_quantity': 15,
+                'avg_buy_price': 100.0
             }
         }
         
