@@ -76,6 +76,7 @@ class APIEndpoints:
 
     # Portfolio
     PORTFOLIO_CALCULATE = "/portfolio/calculate"
+    PORTFOLIO_CALCULATE_RANGE = "/portfolio/calculate-range"
     PORTFOLIO_REFRESH = "/portfolio/refresh"
     PORTFOLIO_DAILY = "/portfolio/daily"
     PORTFOLIO_ISIN_MAPPING = "/portfolio/isin-mapping"

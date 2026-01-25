@@ -199,6 +199,35 @@ def trigger_portfolio_refresh() -> Dict[str, Any]:
     return response.json()
 
 
+def calculate_portfolio_range(
+    start_date: str,
+    end_date: str,
+    tickers: Optional[list] = None
+) -> Dict[str, Any]:
+    """Calculate portfolio metrics for a custom date range.
+    
+    Args:
+        start_date: Start date in YYYY-MM-DD format
+        end_date: End date in YYYY-MM-DD format
+        tickers: Optional list of tickers to include (e.g., ["VWCE.DE", "IWDA.AS"])
+        
+    Returns:
+        Response JSON with portfolio calculations including sales metrics
+        
+    Raises:
+        requests.RequestException: On API errors
+    """
+    payload = {
+        "start_date": start_date,
+        "end_date": end_date
+    }
+    if tickers:
+        payload["tickers"] = tickers
+    
+    response = _make_api_request("POST", APIEndpoints.PORTFOLIO_CALCULATE_RANGE, json=payload)
+    return response.json()
+
+
 def upload_transactions_file(uploaded_file) -> Optional[Dict[str, Any]]:
     """Upload CSV file to backend via API with validation.
     

@@ -8,6 +8,34 @@ from typing import Tuple
 from src.utils.styling import get_badge_color, get_badge_icon
 
 
+def format_currency(value: float) -> str:
+    """Format value as currency in euros.
+    
+    Args:
+        value: Numeric value to format
+        
+    Returns:
+        Formatted currency string (e.g., "€ 1,234.56")
+    """
+    return f"€ {value:,.2f}"
+
+
+def format_percentage(value: float, decimals: int = 2) -> str:
+    """Format value as percentage.
+    
+    Args:
+        value: Numeric value to format
+        decimals: Number of decimal places
+        
+    Returns:
+        Formatted percentage string (e.g., "+5.25%")
+    """
+    if value >= 0:
+        return f"+{value:.{decimals}f}%"
+    else:
+        return f"{value:.{decimals}f}%"
+
+
 def format_portfolio_badge(
     current_value: float,
     daily_delta: float,

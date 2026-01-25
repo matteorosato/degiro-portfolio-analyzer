@@ -160,38 +160,32 @@ def render_portfolio_summary(
         f"({(selected_end_date - selected_start_date).days} days)"
     )
 
-    # For "All time" period, use backend-calculated values
-    # For custom periods, calculate locally based on filtered data
-    if date_selection == "All time" and len(filtered_df) > 0:
-        # Use backend-calculated values for full period
+    # Calculate period metrics based on filtered data
+    if len(filtered_df) > 0:
+        period_start_value = filtered_df.iloc[0].get("Current Value (€)", 0)
+        period_start_cost = filtered_df.iloc[0].get("Total Cost (€)", 0)
         period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
-        period_return_euro = filtered_df.iloc[-1].get("Current Money Weighted Return (€)", 0)
-        period_performance_pct = filtered_df.iloc[-1].get("Net Performance (%)", 0)
-    else:
-        # Calculate locally for custom periods
-        if len(filtered_df) > 0:
-            period_start_value = filtered_df.iloc[0].get("Current Value (€)", 0)
-            period_start_cost = filtered_df.iloc[0].get("Total Cost (€)", 0)
-            period_end_value = filtered_df.iloc[-1].get("Current Value (€)", 0)
-            period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
-            
-            # Use net return difference for more accurate period calculation
-            net_return_start = filtered_df.iloc[0].get('Net Return (€)', 0)
-            net_return_end = filtered_df.iloc[-1].get('Net Return (€)', 0)
-            period_return_euro = net_return_end - net_return_start
-            
-            # Calculate net cash flows during the period (investments/withdrawals)
-            net_cash_flows_period = period_end_cost - period_start_cost
-            
-            # Calculate Period Performance % using net return over initial cost (like backend)
-            if period_start_cost != 0:
-                period_performance_pct = (period_return_euro / period_start_cost) * 100
-            else:
-                period_performance_pct = 0
+        period_end_cost = filtered_df.iloc[-1].get("Total Cost (€)", 0)
+        
+        # Use net return difference for accurate period calculation
+        net_return_start = filtered_df.iloc[0].get('Net Return (€)', 0)
+        net_return_end = filtered_df.iloc[-1].get('Net Return (€)', 0)
+        period_return_euro = net_return_end - net_return_start
+        
+        # Calculate net cash flows during the period (investments/withdrawals)
+        capital_invested_in_period = period_end_cost - period_start_cost
+        
+        # Calculate Period Performance % considering capital flows
+        if abs(capital_invested_in_period) >= 10:
+            # Significant capital flow in period - use capital invested as denominator
+            period_performance_pct = (period_return_euro / abs(capital_invested_in_period)) * 100
         else:
-            period_end_value = 0
-            period_return_euro = 0
-            period_performance_pct = 0
+            # No significant flows (HOLD period) - use start cost as denominator
+            period_performance_pct = (period_return_euro / period_start_cost) * 100 if period_start_cost != 0 else 0
+    else:
+        period_end_value = 0
+        period_return_euro = 0
+        period_performance_pct = 0
 
     # Display metrics
     col1, col2, col3 = st.columns(3)
@@ -210,6 +204,59 @@ def render_portfolio_summary(
         st.metric(
             label="Period Performance",
             value=f"{performance_sign}{period_performance_pct:.2f}%"
+        )
+
+
+def render_sales_metrics(
+    total_sales_proceeds: float,
+    total_sales_quantity: int,
+    avg_sale_price: float,
+    total_bought_quantity: int,
+    avg_buy_price: float
+) -> None:
+    """Render sales and trading metrics section.
+    
+    Args:
+        total_sales_proceeds: Total money received from stock sales
+        total_sales_quantity: Total number of shares sold
+        avg_sale_price: Average price per share sold
+        total_bought_quantity: Total number of shares bought
+        avg_buy_price: Average price per share bought
+    """
+    st.subheader("📊 Sales & Trading Metrics")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            label="Total Sales Proceeds",
+            value=f"€ {total_sales_proceeds:,.2f}",
+            help="Total money received from selling shares"
+        )
+    with col2:
+        st.metric(
+            label="Shares Sold",
+            value=f"{total_sales_quantity:,}",
+            help="Total number of shares sold"
+        )
+    with col3:
+        st.metric(
+            label="Avg Sale Price",
+            value=f"€ {avg_sale_price:,.2f}",
+            help="Average price per share when sold"
+        )
+    
+    col4, col5 = st.columns(2)
+    with col4:
+        st.metric(
+            label="Shares Bought",
+            value=f"{total_bought_quantity:,}",
+            help="Total number of shares purchased"
+        )
+    with col5:
+        st.metric(
+            label="Avg Buy Price",
+            value=f"€ {avg_buy_price:,.2f}",
+            help="Average price per share when purchased"
         )
 
 
