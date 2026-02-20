@@ -468,7 +468,7 @@ def render_header():
 def render_period_selector() -> str:
     """Render sticky period selector with segmented control buttons and custom date option."""
 
-    st.markdown("#### 📅 Select period")
+    st.markdown("#### 📅 Select period:")
 
     selected_period = st.segmented_control(
         "Period:",
@@ -479,12 +479,18 @@ def render_period_selector() -> str:
         label_visibility="collapsed"
     )
 
-    # Show selected period dates below the selector
+    # Show selected period dates below the selector using metric widgets
     start_date_str, end_date_str = get_period_dates(selected_period)
     start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
     end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-
-    st.markdown(f"*{selected_period}*: from *{start_date.strftime('%d %b %Y')}* to *{end_date.strftime('%d %b %Y')}*")
+    
+    col = st.container()
+    with col:
+        subcol1, subcol2, _, _ = st.columns(4)
+        with subcol1:
+            st.metric("From", start_date.strftime('%d %b %Y'))
+        with subcol2:
+            st.metric("To", end_date.strftime('%d %b %Y'))
 
     # Show custom date pickers if Custom is selected
     if selected_period == "Custom":
