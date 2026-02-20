@@ -30,7 +30,6 @@ st.markdown(
     **👈 Select a page from the sidebar** to access different features:
     
     - **📈 Dashboard**: Overview of your portfolio performance and key metrics
-    - **💹 Stock Split Calculator**: Calculate optimal stock splits for your investments
     - **🔗 Ticker Mapping**: Manage ISIN to ticker symbol mappings
     - **📊 Portfolio Analysis**: Detailed analysis of portfolio performance over time
     - **🎯 Type Split Analysis**: Analyze portfolio allocation by asset type
