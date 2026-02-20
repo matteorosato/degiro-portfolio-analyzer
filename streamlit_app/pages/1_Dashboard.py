@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 
 import pandas as pd
 import streamlit as st
@@ -217,6 +217,25 @@ try:
         st.session_state.force_refresh_portfolio = False
     df = st.session_state.portfolio_df
     df = prepare_portfolio_dataframe(df)
+    
+    # Check if data is stale (older than today)
+    if not df.empty:
+        latest_data_date = df['End Date'].max().date()
+        today = date.today()
+        
+        if latest_data_date < today:
+            st.info(f"Portfolio data is outdated (last updated: {latest_data_date}). Updating to today's data...")
+            with st.spinner("Refreshing portfolio data..."):
+                try:
+                    trigger_portfolio_calculation()
+                    # Re-fetch the updated data
+                    st.session_state.portfolio_df = fetch_portfolio_daily()
+                    df = st.session_state.portfolio_df
+                    df = prepare_portfolio_dataframe(df)
+                    st.success("Portfolio data updated successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error updating portfolio data: {e}")
 except Exception as e:
     handle_api_error(e, "Failed to fetch portfolio data")
 
