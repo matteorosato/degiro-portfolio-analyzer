@@ -74,7 +74,8 @@ def render_metric_card(
     value: str,
     context: str = "",
     delta: str = "",
-    delta_color: bool = False
+    delta_color: bool = False,
+    color_value: float = 0
 ):
     """Render a single metric card with consistent styling."""
     color_class = ""
@@ -82,6 +83,11 @@ def render_metric_card(
         if "+" in delta or "🟢" in delta:
             color_class = "positive"
         elif "-" in delta or "🔴" in delta:
+            color_class = "negative"
+    elif color_value != 0:  # Apply color based on value if no delta
+        if color_value > 0:
+            color_class = "positive"
+        elif color_value < 0:
             color_class = "negative"
     
     html = f"""
@@ -141,10 +147,7 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
                 "period_return_pct": 0,
                 "period_performance_pct": 0,
                 "annualized_return_pct": 0,
-                "max_drawdown_pct": None,
-                "volatility_pct": None,
                 "realized_gains": 0,
-                "sharpe_ratio": None,
                 "best_day_pct": None,
                 "worst_day_pct": None,
                 "portfolio_value": 0,
@@ -216,12 +219,9 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
             "period_return_euro": round(period_return_euro, 2),
             "period_performance_pct": period_performance_pct,
             "annualized_return_pct": annualized_return,
-            "max_drawdown_pct": None,
-            "volatility_pct": None,
             "realized_gains": realized_gains,
             "unrealized_gains": unrealized_gains_period,
             "unrealized_gains_pct": unrealized_gains_pct_period,
-            "sharpe_ratio": None,
             "best_day_pct": None,
             "worst_day_pct": None,
             "portfolio_value": end_row.get("Current Value (€)", 0),
@@ -509,7 +509,6 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             title="Portfolio Value",
             value=format_currency(global_metrics.get("portfolio_value", 0)),
             context="Current as of today",
-            delta="Today's Total",
             delta_color=False
         )
         st.markdown(html, unsafe_allow_html=True)
@@ -522,9 +521,8 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             icon="📈",
             title="Period Return",
             value=format_currency(period_return_euro),
-            context="Changes with period",
-            delta=get_color_delta(period_performance_pct) + " " + format_percentage(period_performance_pct),
-            delta_color=True
+            context="Return within the selected period",
+            color_value=period_performance_pct
         )
         st.markdown(html, unsafe_allow_html=True)
     
@@ -535,9 +533,8 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             icon="🎯",
             title="Performance %",
             value=format_percentage(period_performance_pct),
-            context="Period-specific return",
-            delta=get_color_delta(period_performance_pct) + " " + format_percentage(period_performance_pct),
-            delta_color=True
+            context="Portfolio performance within the selected period",
+            color_value=period_performance_pct
         )
         st.markdown(html, unsafe_allow_html=True)
     
@@ -548,42 +545,25 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
     
     with col1:
         unrealized_gains = period_metrics.get("unrealized_gains", 0)
-        unrealized_pct = period_metrics.get("unrealized_gains_pct", 0)
-        # Only apply red color if gains are negative, neutral if zero
-        if unrealized_gains > 0:
-            delta_text = "🟢 " + format_percentage(unrealized_pct)
-        elif unrealized_gains < 0:
-            delta_text = "🔴 " + format_percentage(unrealized_pct)
-        else:
-            delta_text = format_percentage(unrealized_pct)
         
         html = render_metric_card(
             icon="💵",
             title="Unrealized Gains",
             value=format_currency(unrealized_gains),
-            context="Current holdings",
-            delta=delta_text,
-            delta_color=unrealized_gains != 0
+            context="From holdings within the selected period",
+            color_value=unrealized_gains
         )
         st.markdown(html, unsafe_allow_html=True)
     
     with col2:
         realized_gains = period_metrics.get("realized_gains", 0)
-        # Only apply red color if gains are negative, neutral if zero
-        if realized_gains > 0:
-            delta_text = "🟢 Period-specific"
-        elif realized_gains < 0:
-            delta_text = "🔴 Period-specific"
-        else:
-            delta_text = "Period-specific"
         
         html = render_metric_card(
             icon="✅",
             title="Realized Gains",
             value=format_currency(realized_gains),
-            context="From sales this period",
-            delta=delta_text,
-            delta_color=realized_gains != 0
+            context="From sales within the selected period",
+            color_value=realized_gains
         )
         st.markdown(html, unsafe_allow_html=True)
     
@@ -592,76 +572,12 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             icon="📊",
             title="YTD Return",
             value=format_percentage(ytd_metrics.get("ytd_return_pct", 0)),
-            context="Jan 1 - Today",
-            delta=get_color_delta(ytd_metrics.get("ytd_return_pct", 0)) + " Fixed dates",
-            delta_color=True
+            context="From Jan 1 to Today",
+            color_value=ytd_metrics.get("ytd_return_pct", 0)
         )
         st.markdown(html, unsafe_allow_html=True)
     
     st.markdown("")  # Spacing
-    
-    # ROW 3: RISK METRICS
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        max_dd = period_metrics.get("max_drawdown_pct")
-        if max_dd is None:
-            html = render_metric_card(
-                icon="📉",
-                title="Max Drawdown",
-                value="N/A",
-                context="Requires daily data",
-                delta="Coming soon"
-            )
-        else:
-            html = render_metric_card(
-                icon="📉",
-                title="Max Drawdown",
-                value=format_percentage(max_dd),
-                context="Period-specific",
-                delta="Risk metric"
-            )
-        st.markdown(html, unsafe_allow_html=True)
-    
-    with col2:
-        volatility = period_metrics.get("volatility_pct")
-        if volatility is None:
-            html = render_metric_card(
-                icon="📊",
-                title="Volatility",
-                value="N/A",
-                context="Requires daily data",
-                delta="Annual basis"
-            )
-        else:
-            html = render_metric_card(
-                icon="📊",
-                title="Volatility",
-                value=format_percentage(volatility),
-                context="Period-specific",
-                delta="Annual basis"
-            )
-        st.markdown(html, unsafe_allow_html=True)
-    
-    with col3:
-        sharpe = period_metrics.get("sharpe_ratio")
-        if sharpe is None:
-            html = render_metric_card(
-                icon="🔷",
-                title="Sharpe Ratio",
-                value="N/A",
-                context="Requires volatility",
-                delta="Risk-adjusted"
-            )
-        else:
-            html = render_metric_card(
-                icon="🔷",
-                title="Sharpe Ratio",
-                value=f"{sharpe:.2f}",
-                context="Period-specific",
-                delta="Risk-adjusted return"
-            )
-        st.markdown(html, unsafe_allow_html=True)
 
 
 def render_holdings_section(global_metrics: Dict, period_metrics: Dict):
