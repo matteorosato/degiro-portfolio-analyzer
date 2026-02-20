@@ -159,10 +159,28 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
         start_value = start_row.get("Current Value (€)", 0)
         end_value = end_row.get("Current Value (€)", 0)
         
-        net_return_start = start_row.get('Net Return (€)', 0)
-        net_return_end = end_row.get('Net Return (€)', 0)
-        period_return_euro = net_return_end - net_return_start
-        
+        # Calculate realized gains change during period
+        realized_gains = round(end_row.get("Realized Return (€)", 0) - start_row.get("Realized Return (€)", 0), 2)
+
+        # Calculate unrealized gains change during period
+        unrealized_gains_start = start_row.get("Current Money Weighted Return (€)", 0)
+        unrealized_gains_end = end_row.get("Current Money Weighted Return (€)", 0)
+
+        # For "All time" periods, use the current unrealized gains value (not the change)
+        # For other periods, use the change in unrealized gains
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        days_in_period = max(1, (end_dt - start_dt).days)
+
+        is_all_time = (end_dt - start_dt).days >= 36000  # Approximately 100 years
+        if is_all_time:
+            unrealized_gains_period = round(unrealized_gains_end, 2)
+        else:
+            unrealized_gains_period = round(unrealized_gains_end - unrealized_gains_start, 2)
+
+        # Period Return = Realized Gains + Unrealized Gains (this ensures the relationship holds)
+        period_return_euro = realized_gains + unrealized_gains_period
+
         # Calculate period return percentage with correct denominator
         if start_cost != 0:
             period_return_pct = round((period_return_euro / start_cost) * 100, 2)
@@ -180,10 +198,6 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
         else:
             period_performance_pct = 0
         
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-        days_in_period = max(1, (end_dt - start_dt).days)
-        
         if days_in_period >= 365:
             annualized_return = round(period_return_pct, 2)
         elif period_return_pct != 0:
@@ -191,26 +205,12 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
         else:
             annualized_return = 0
         
-        realized_gains = round(end_row.get("Realized Return (€)", 0) - start_row.get("Realized Return (€)", 0), 2)
-        
-        # Calculate unrealized gains change during period
-        unrealized_gains_start = start_row.get("Current Money Weighted Return (€)", 0)
-        unrealized_gains_end = end_row.get("Current Money Weighted Return (€)", 0)
-        
-        # For "All time" periods, use the current unrealized gains value (not the change)
-        # For other periods, use the change in unrealized gains
-        is_all_time = (end_dt - start_dt).days >= 36000  # Approximately 100 years
-        if is_all_time:
-            unrealized_gains_period = round(unrealized_gains_end, 2)
-        else:
-            unrealized_gains_period = round(unrealized_gains_end - unrealized_gains_start, 2)
-        
         # Calculate unrealized gains percentage for period
         if start_value > 0:
             unrealized_gains_pct_period = round((unrealized_gains_period / start_value) * 100, 2)
         else:
             unrealized_gains_pct_period = 0
-        
+        # TODO this should be done at backend level
         return {
             "period_return_pct": period_return_pct,
             "period_return_euro": round(period_return_euro, 2),
