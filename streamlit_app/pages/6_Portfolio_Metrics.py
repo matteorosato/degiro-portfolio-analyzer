@@ -10,16 +10,16 @@ Modern, visually engaging dashboard with:
 Default period: All Time
 """
 
-import streamlit as st
-import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple
 
+import streamlit as st
+
+from streamlit_app.config import FrontendConfig
 from streamlit_app.src.api.client import is_backend_alive, portfolio_data_exists
+from streamlit_app.src.data.transformers import prepare_portfolio_dataframe
 from streamlit_app.src.utils.error_handler import handle_api_error
 from streamlit_app.src.utils.formatting import format_currency, format_percentage
-from streamlit_app.src.data.transformers import prepare_portfolio_dataframe
-from streamlit_app.config import FrontendConfig
 
 # Page configuration
 st.set_page_config(
@@ -47,6 +47,7 @@ PERIOD_PRESETS = {
     "Custom": "custom",
 }
 
+
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
@@ -69,13 +70,13 @@ def get_delta_color_for_value(value: float) -> str:
 
 
 def render_metric_card(
-    icon: str,
-    title: str,
-    value: str,
-    context: str = "",
-    delta: str = "",
-    delta_color: bool = False,
-    color_value: float = 0
+        icon: str,
+        title: str,
+        value: str,
+        context: str = "",
+        delta: str = "",
+        delta_color: bool = False,
+        color_value: float = 0
 ):
     """Render a single metric card with consistent styling."""
     color_class = ""
@@ -89,7 +90,7 @@ def render_metric_card(
             color_class = "positive"
         elif color_value < 0:
             color_class = "negative"
-    
+
     html = f"""
     <div class="metric-card {color_class}">
         <div class="metric-header">
@@ -109,16 +110,16 @@ def fetch_global_metrics() -> Dict[str, Any]:
     """Fetch global (lifetime) metrics from backend."""
     try:
         from streamlit_app.src.api.client import fetch_portfolio_daily
-        
+
         # Fetch only "FULL portfolio" data to avoid getting individual ticker data
         df = fetch_portfolio_daily(ticker="FULL")
         df = prepare_portfolio_dataframe(df)
-        
+
         if df.empty:
             return {}
-        
+
         latest = df.iloc[-1]
-        
+
         return {
             "portfolio_value": latest.get("Current Value (€)", 0),
             "total_invested": latest.get("Total Cost (€)", 0),
@@ -137,11 +138,11 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
     """Fetch period-dependent metrics from backend."""
     try:
         from streamlit_app.src.api.client import fetch_portfolio_daily
-        
+
         # Fetch only "FULL portfolio" data to avoid mixing individual tickers
         df = fetch_portfolio_daily(ticker="FULL", start_date=start_date, end_date=end_date)
         df = prepare_portfolio_dataframe(df)
-        
+
         if df.empty:
             return {
                 "period_return_pct": 0,
@@ -153,15 +154,15 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
                 "portfolio_value": 0,
                 "total_cost": 0,
             }
-        
+
         start_row = df.iloc[0]
         end_row = df.iloc[-1]
-        
+
         start_cost = start_row.get("Total Cost (€)", 0)
         end_cost = end_row.get("Total Cost (€)", 0)
         start_value = start_row.get("Current Value (€)", 0)
         end_value = end_row.get("Current Value (€)", 0)
-        
+
         # Calculate realized gains change during period
         realized_gains = round(end_row.get("Realized Return (€)", 0) - start_row.get("Realized Return (€)", 0), 2)
 
@@ -189,25 +190,25 @@ def fetch_period_metrics(start_date: str, end_date: str) -> Dict[str, Any]:
             period_return_pct = round((period_return_euro / start_cost) * 100, 2)
         else:
             period_return_pct = 0
-        
+
         # Calculate period performance percentage (considering capital flows)
         # For "All time" periods, always use total_invested_amount (total capital ever invested)
         # For shorter periods, use start_value (capital at period start)
         end_row_total_cost = end_row.get("Total Cost (€)", 0)
-        
+
         if start_value > 0:
             # Use start value as denominator (performance from the capital base at period start)
             period_performance_pct = round((period_return_euro / start_value) * 100, 2)
         else:
             period_performance_pct = 0
-        
+
         if days_in_period >= 365:
             annualized_return = round(period_return_pct, 2)
         elif period_return_pct != 0:
             annualized_return = round(((1 + period_return_pct / 100) ** (365 / days_in_period) - 1) * 100, 2)
         else:
             annualized_return = 0
-        
+
         # Calculate unrealized gains percentage for period
         if start_value > 0:
             unrealized_gains_pct_period = round((unrealized_gains_period / start_value) * 100, 2)
@@ -239,34 +240,34 @@ def fetch_ytd_metrics() -> Dict[str, Any]:
     """Fetch Year-to-Date metrics."""
     try:
         from streamlit_app.src.api.client import fetch_portfolio_daily
-        
+
         today = datetime.now().date()
         ytd_start = f"{today.year}-01-01"
         ytd_end = today.strftime("%Y-%m-%d")
-        
+
         # Fetch only "FULL portfolio" data to avoid mixing individual tickers
         df = fetch_portfolio_daily(ticker="FULL", start_date=ytd_start, end_date=ytd_end)
         df = prepare_portfolio_dataframe(df)
-        
+
         if df.empty:
             return {"ytd_return_pct": 0}
-        
+
         start_row = df.iloc[0]
         end_row = df.iloc[-1]
-        
+
         start_cost = start_row.get("Total Cost (€)", 0)
         end_cost = end_row.get("Total Cost (€)", 0)
         start_value = start_row.get("Current Value (€)", 0)
-        
+
         net_return_start = start_row.get('Net Return (€)', 0)
         net_return_end = end_row.get('Net Return (€)', 0)
         period_return_euro = net_return_end - net_return_start
-        
+
         if start_cost != 0:
             ytd_return_pct = round((period_return_euro / start_cost) * 100, 2)
         else:
             ytd_return_pct = 0
-        
+
         # Calculate YTD performance percentage (considering capital flows)
         # Prefer start_value when available, use capital flows only if start_value is 0
         capital_invested_ytd = end_cost - start_cost
@@ -276,7 +277,7 @@ def fetch_ytd_metrics() -> Dict[str, Any]:
             ytd_performance_pct = round((period_return_euro / abs(capital_invested_ytd)) * 100, 2)
         else:
             ytd_performance_pct = 0
-        
+
         return {"ytd_return_pct": ytd_return_pct, "ytd_performance_pct": ytd_performance_pct}
     except Exception as e:
         handle_api_error(e, "Failed to load YTD metrics")
@@ -286,7 +287,7 @@ def fetch_ytd_metrics() -> Dict[str, Any]:
 def get_period_dates(period_key: str) -> Tuple[str, str]:
     """Convert period key to start_date and end_date strings."""
     today = datetime.now().date()
-    
+
     if period_key == "YTD":
         start_date = datetime(today.year, 1, 1).date()
     elif period_key == "All time":
@@ -307,7 +308,7 @@ def get_period_dates(period_key: str) -> Tuple[str, str]:
     else:
         days_offset = PERIOD_PRESETS[period_key][0]
         start_date = today + timedelta(days=days_offset)
-    
+
     return start_date.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
 
 
@@ -466,9 +467,9 @@ def render_header():
 
 def render_period_selector() -> str:
     """Render sticky period selector with segmented control buttons and custom date option."""
-    
+
     st.markdown("#### 📅 Select period")
-    
+
     selected_period = st.segmented_control(
         "Period:",
         options=list(PERIOD_PRESETS.keys()),
@@ -477,14 +478,14 @@ def render_period_selector() -> str:
         key="period_selector",
         label_visibility="collapsed"
     )
-    
+
     # Show selected period dates below the selector
     start_date_str, end_date_str = get_period_dates(selected_period)
     start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
     end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-    
+
     st.markdown(f"*{selected_period}*: from *{start_date.strftime('%d %b %Y')}* to *{end_date.strftime('%d %b %Y')}*")
-    
+
     # Show custom date pickers if Custom is selected
     if selected_period == "Custom":
         col1, col2 = st.columns(2)
@@ -500,20 +501,20 @@ def render_period_selector() -> str:
                 value=datetime.now().date(),
                 key="custom_end_date"
             )
-        
+
         # Validate dates
         if custom_start > custom_end:
             st.error("Start Date must be before End Date")
-    
+
     return selected_period
 
 
 def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics: Dict):
     """Render the 3×3 grid of metric cards."""
-    
+
     # ROW 1: CURRENT STATE
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         html = render_metric_card(
             icon="🤑",
@@ -523,11 +524,11 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             delta_color=False
         )
         st.markdown(html, unsafe_allow_html=True)
-    
+
     with col2:
         period_return_euro = period_metrics.get("period_return_euro", 0)
         period_performance_pct = period_metrics.get("period_performance_pct", 0)
-        
+
         html = render_metric_card(
             icon="📈",
             title="Period Return",
@@ -536,10 +537,10 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             color_value=period_performance_pct
         )
         st.markdown(html, unsafe_allow_html=True)
-    
+
     with col3:
         period_performance_pct = period_metrics.get("period_performance_pct", 0)
-        
+
         html = render_metric_card(
             icon="🎯",
             title="Performance %",
@@ -548,15 +549,15 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             color_value=period_performance_pct
         )
         st.markdown(html, unsafe_allow_html=True)
-    
+
     st.markdown("")  # Spacing
-    
+
     # ROW 2: PERIOD SPECIFICS
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         unrealized_gains = period_metrics.get("unrealized_gains", 0)
-        
+
         html = render_metric_card(
             icon="💰",
             title="Unrealized Gains",
@@ -565,10 +566,10 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             color_value=unrealized_gains
         )
         st.markdown(html, unsafe_allow_html=True)
-    
+
     with col2:
         realized_gains = period_metrics.get("realized_gains", 0)
-        
+
         html = render_metric_card(
             icon="💸",
             title="Realized Gains",
@@ -577,7 +578,7 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             color_value=realized_gains
         )
         st.markdown(html, unsafe_allow_html=True)
-    
+
     with col3:
         html = render_metric_card(
             icon="📊",
@@ -587,7 +588,7 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             color_value=ytd_metrics.get("ytd_return_pct", 0)
         )
         st.markdown(html, unsafe_allow_html=True)
-    
+
     st.markdown("")  # Spacing
 
 
@@ -595,23 +596,23 @@ def render_holdings_section(global_metrics: Dict, period_metrics: Dict):
     """Render holdings and capital flows section."""
     st.markdown("---")
     st.markdown("## 📋 Holdings & Capital Flows")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("### 🏢 Portfolio Composition")
         latest_row = global_metrics.get("latest_row")
-        
+
         if latest_row is not None:
             st.metric("Total Value", format_currency(latest_row.get("Current Value (€)", 0)))
             st.metric("Total Invested", format_currency(latest_row.get("Total Cost (€)", 0)))
             st.metric("Unrealized Gains", format_currency(latest_row.get("Current Money Weighted Return (€)", 0)))
-        
+
         st.info("📊 Detailed stock-by-stock breakdown coming soon")
-    
+
     with col2:
         st.markdown("### 💳 Capital Flows")
-        
+
         col2a, col2b = st.columns(2)
         with col2a:
             st.metric(
@@ -642,37 +643,37 @@ def main():
     """Main application logic."""
     # Inject custom CSS
     inject_custom_css()
-    
+
     # Check backend
     if not is_backend_alive():
         st.error("❌ Backend API is not reachable. Please ensure the backend is running.")
         st.stop()
-    
+
     # Check data
     if not portfolio_data_exists():
         st.warning("⚠️ No portfolio data found. Please go to Dashboard and upload your transactions file.")
         st.stop()
-    
+
     # Render header
     render_header()
-    
+
     # Period selector (sticky at top)
     st.markdown("---")
     selected_period = render_period_selector()
     st.markdown("---")
-    
+
     # Fetch all metrics
     global_metrics = fetch_global_metrics()
     start_date, end_date = get_period_dates(selected_period)
     period_metrics = fetch_period_metrics(start_date, end_date)
     ytd_metrics = fetch_ytd_metrics()
-    
+
     # Render 3×3 grid
     render_metrics_grid(global_metrics, period_metrics, ytd_metrics)
-    
+
     # Render holdings section
     render_holdings_section(global_metrics, period_metrics)
-    
+
     # Footer
     st.markdown("---")
     st.caption(
