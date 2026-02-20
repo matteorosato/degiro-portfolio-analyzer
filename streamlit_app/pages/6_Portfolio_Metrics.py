@@ -505,10 +505,10 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
     
     with col1:
         html = render_metric_card(
-            icon="💰",
+            icon="🤑",
             title="Portfolio Value",
             value=format_currency(global_metrics.get("portfolio_value", 0)),
-            context="Current as of today",
+            context="Current as of Today",
             delta_color=False
         )
         st.markdown(html, unsafe_allow_html=True)
@@ -533,7 +533,7 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
             icon="🎯",
             title="Performance %",
             value=format_percentage(period_performance_pct),
-            context="Portfolio performance within the selected period",
+            context="Performance within the selected period",
             color_value=period_performance_pct
         )
         st.markdown(html, unsafe_allow_html=True)
@@ -547,7 +547,7 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
         unrealized_gains = period_metrics.get("unrealized_gains", 0)
         
         html = render_metric_card(
-            icon="💵",
+            icon="💰",
             title="Unrealized Gains",
             value=format_currency(unrealized_gains),
             context="From holdings within the selected period",
@@ -559,7 +559,7 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
         realized_gains = period_metrics.get("realized_gains", 0)
         
         html = render_metric_card(
-            icon="✅",
+            icon="💸",
             title="Realized Gains",
             value=format_currency(realized_gains),
             context="From sales within the selected period",
@@ -570,7 +570,7 @@ def render_metrics_grid(global_metrics: Dict, period_metrics: Dict, ytd_metrics:
     with col3:
         html = render_metric_card(
             icon="📊",
-            title="YTD Return",
+            title="YTD Return %",
             value=format_percentage(ytd_metrics.get("ytd_return_pct", 0)),
             context="From Jan 1 to Today",
             color_value=ytd_metrics.get("ytd_return_pct", 0)
