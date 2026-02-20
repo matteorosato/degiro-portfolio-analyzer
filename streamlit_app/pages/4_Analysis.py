@@ -59,7 +59,7 @@ holdings_option = st.segmented_control(
     options=UIConstants.HOLDINGS_OPTIONS,
     default="Current Holdings",
     selection_mode="single",
-    help="Current Holdings only include products with a non-zero current value"
+    help="All Holdings also include products that are no longer held in the portfolio"
 )
 
 # ============================================================================
@@ -104,7 +104,7 @@ badge_color, badge_icon, badge_text = format_portfolio_badge(
 
 st.markdown(
     f":{badge_color}-badge[{badge_icon} {badge_text}]",
-    help="**Portfolio Value:** Shows the current portfolio value and the last daily change (in euros and percentage)."
+    help="**Portfolio Value:** Shows the current portfolio value and the last daily change"
 )
 
 # Calculate table height
