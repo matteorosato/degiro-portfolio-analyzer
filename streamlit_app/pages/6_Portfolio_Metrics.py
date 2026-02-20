@@ -44,7 +44,6 @@ PERIOD_PRESETS = {
     "Last year": "last_year",
     "Last month": "last_month",
     "All time": "all_time",
-    "Custom": "custom",
 }
 
 
@@ -296,15 +295,6 @@ def get_period_dates(period_key: str) -> Tuple[str, str]:
         start_date = today - timedelta(days=365)
     elif period_key == "Last month":
         start_date = today - timedelta(days=30)
-    elif period_key == "Custom":
-        # Get custom dates from session state
-        if "custom_start_date" in st.session_state and "custom_end_date" in st.session_state:
-            start_date = st.session_state.custom_start_date
-            end_date = st.session_state.custom_end_date
-            return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
-        else:
-            # Default to last 30 days if not set
-            start_date = today - timedelta(days=30)
     else:
         days_offset = PERIOD_PRESETS[period_key][0]
         start_date = today + timedelta(days=days_offset)
@@ -468,7 +458,7 @@ def render_header():
 def render_period_selector() -> str:
     """Render sticky period selector with segmented control buttons and custom date option."""
 
-    st.markdown("#### 📅 Select period:")
+    st.markdown("### 📅 Select period:")
 
     selected_period = st.segmented_control(
         "Period:",
@@ -491,26 +481,6 @@ def render_period_selector() -> str:
             st.metric("From", start_date.strftime('%d %b %Y'))
         with subcol2:
             st.metric("To", end_date.strftime('%d %b %Y'))
-
-    # Show custom date pickers if Custom is selected
-    if selected_period == "Custom":
-        col1, col2 = st.columns(2)
-        with col1:
-            custom_start = st.date_input(
-                "Start Date",
-                value=datetime.now().date() - timedelta(days=30),
-                key="custom_start_date"
-            )
-        with col2:
-            custom_end = st.date_input(
-                "End Date",
-                value=datetime.now().date(),
-                key="custom_end_date"
-            )
-
-        # Validate dates
-        if custom_start > custom_end:
-            st.error("Start Date must be before End Date")
 
     return selected_period
 

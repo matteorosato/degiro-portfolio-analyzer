@@ -325,12 +325,8 @@ render_performance_chart(
     selected_end_date
 )
 
-# ---- Portfolio Summary Section ----
+# ---- Portfolio Composition Section ----
 if not filtered_df.empty:
-    render_portfolio_summary(filtered_df, selected_start_date, selected_end_date, date_selection)
-    st.divider()
-
-    # ---- Portfolio Composition Section ----
     render_portfolio_composition(df, filtered_df)
     st.divider()
 else:
