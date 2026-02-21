@@ -217,21 +217,6 @@ try:
         st.session_state.force_refresh_portfolio = False
     df = st.session_state.portfolio_df
     df = prepare_portfolio_dataframe(df)
-    
-    # Check if data is stale (older than today)
-    if not df.empty:
-        latest_data_date = df['End Date'].max().date()
-        today = date.today()
-        
-        if latest_data_date < today and not st.session_state.get("data_update_in_progress", False):
-            st.session_state.data_update_in_progress = True
-            with st.spinner("Refreshing portfolio data..."):
-                try:
-                    trigger_portfolio_calculation()
-                    st.toast("Portfolio data updated successfully!", icon="✅")
-                except Exception as e:
-                    st.toast(f"Error updating portfolio data: {e}", icon="❌")
-            st.session_state.data_update_in_progress = False
 except Exception as e:
     handle_api_error(e, "Failed to fetch portfolio data")
 
@@ -247,6 +232,21 @@ if df.empty:
 with st.sidebar:
     selected_product, selected_compare_product = render_product_selector(df)
     selected_metric = render_metric_selector(df)
+
+# Sidebar: refresh button section
+with st.sidebar:
+    st.divider()
+    latest_date = df['End Date'].max().date()
+    st.caption(f"**Latest available data:** {latest_date.strftime('%d %b %Y')}")
+    if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True,
+                 help="Recalculates your portfolio with current data"):
+        st.session_state.startup_refresh = False
+        st.session_state.force_refresh_portfolio = True
+        with st.spinner("Refreshing data..."):
+            refresh_data()
+        st.toast("✅ Data updated successfully!")
+        st.session_state.startup_refresh = True
+        st.rerun()
 
 # Sidebar: divider and upload button
 with st.sidebar:
@@ -331,17 +331,6 @@ else:
 # Sidebar: troubleshooting section
 with st.sidebar:
     with st.expander("🔧 Troubleshooting", expanded=False):
-        if st.button('🔄 Refresh Portfolio Calculation', use_container_width=True,
-                     help="Recalculates your portfolio with current data"):
-            st.session_state.startup_refresh = False
-            st.session_state.force_refresh_portfolio = True
-            with st.spinner("Refreshing data..."):
-                refresh_data()
-            st.toast(f"✅ Data updated successfully!")
-            st.info(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            st.session_state.startup_refresh = True
-            st.rerun()
-
         if st.button('📋 View Logs', use_container_width=True,
                      help="View application and scheduler logs"):
             logs_viewer_dialog()
