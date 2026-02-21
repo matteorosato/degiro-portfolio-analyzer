@@ -71,8 +71,8 @@ def save_mapping(df):
         "ISIN": "FULL_PORTFOLIO",
         "Ticker": "FULL",
         "Exchange": "",
-        "Product Name (DeGiro)": "Full portfolio",
-        "Display Name": "Full portfolio",
+        "Product Name (DeGiro)": "Full Portfolio",
+        "Display Name": "Full Portfolio",
         "Product Type": ""
     }
     df = df[df["ISIN"] != "FULL_PORTFOLIO"]

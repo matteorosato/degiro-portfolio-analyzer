@@ -66,7 +66,7 @@ if os.path.exists(portfolio_file):
     # Filter dataframe
     daily_df_filtered = daily_df[daily_df['End Date'] == daily_df_recent_date]
     daily_df_filtered = daily_df_filtered[daily_df_filtered['Quantity'] > 0]
-    daily_df_filtered = daily_df_filtered[daily_df_filtered['Product'] != 'Full portfolio']
+    daily_df_filtered = daily_df_filtered[daily_df_filtered['Product'] != 'Full Portfolio']
 
     # Input for the amount to invest
     to_invest = st.number_input('Amount to invest', value=350, step=10)

@@ -281,8 +281,8 @@ async def save_isin_mapping(mapping_data: Dict[str, Any] = Body(...)):
         if "FULL_PORTFOLIO" not in mapping_data:
             mapping_data["FULL_PORTFOLIO"] = {
                 "ticker": "FULL",
-                "degiro_name": "Full portfolio",
-                "display_name": "Full portfolio",
+                "degiro_name": "Full Portfolio",
+                "display_name": "Full Portfolio",
                 "exchange": "",
                 "product_type": ""
             }

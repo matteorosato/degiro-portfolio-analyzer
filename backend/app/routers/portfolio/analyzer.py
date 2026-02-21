@@ -398,7 +398,7 @@ class PortfolioAnalyzer:
 
         # Return the aggregated portfolio performance metrics
         return {
-            "product": "Full portfolio",
+            "product": "Full Portfolio",
             "ticker": "FULL",
             "quantity": int(total_quantity),
             "start_date": start_date,

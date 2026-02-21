@@ -207,7 +207,7 @@ class TestPortfolioAnalyzer:
         )
         
         assert result['ticker'] == 'FULL'
-        assert result['product'] == 'Full portfolio'
+        assert result['product'] == 'Full Portfolio'
         assert result['quantity'] == 15
         assert result['total_cost'] == 1500
         assert result['transaction_costs'] == 7

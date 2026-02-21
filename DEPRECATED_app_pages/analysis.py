@@ -26,7 +26,7 @@ if os.path.exists(portfolio_file):
     df = df.sort_values(by='End Date', ascending=True)
 
     # Remove 'Full Portfolio' entry
-    df = df[df["Product"] != "Full portfolio"]
+    df = df[df["Product"] != "Full Portfolio"]
 
     # Set the default date to most recent end date
     default_selected_date = df['End Date'].max()

@@ -90,7 +90,7 @@ class TestPortfolioService:
                 'avg_buy_price': 100.0
             },
             'portfolio': {
-                'product': 'Full portfolio',
+                'product': 'Full Portfolio',
                 'ticker': 'FULL',
                 'quantity': 15,
                 'start_date': '2023-01-01',
@@ -241,7 +241,7 @@ class TestPortfolioService:
                 'net_performance_percentage': 5.0
             },
             'portfolio': {
-                'product': 'Full portfolio',
+                'product': 'Full Portfolio',
                 'ticker': 'FULL',
                 'quantity': 15,
                 'start_date': '2023-01-01',

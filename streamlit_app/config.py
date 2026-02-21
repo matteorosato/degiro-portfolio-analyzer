@@ -35,7 +35,7 @@ class UIConstants:
     # Analysis Page
     TREND_DAYS = 30
     HOLDINGS_OPTIONS = ["Current Holdings", "All Holdings"]
-    FULL_PORTFOLIO_NAME = "Full portfolio"
+    FULL_PORTFOLIO_NAME = "Full Portfolio"
 
     # Type Split Page
     DATE_RANGE_OPTIONS = ["1Y", "3M", "1M", "1W", "YTD", "Last year", "Last month", "All time"]

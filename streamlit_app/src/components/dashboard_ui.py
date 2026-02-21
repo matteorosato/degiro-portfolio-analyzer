@@ -28,12 +28,12 @@ def render_product_selector(df: pd.DataFrame) -> Tuple[str, str]:
     """
     # Sort product options
     product_options = sorted(df['Product'].unique().tolist())
-    if "Full portfolio" in product_options:
-        product_options.remove("Full portfolio")
-        product_options.insert(0, "Full portfolio")
+    if "Full Portfolio" in product_options:
+        product_options.remove("Full Portfolio")
+        product_options.insert(0, "Full Portfolio")
 
     # Set default index for "Full Portfolio"
-    default_index = product_options.index("Full portfolio")
+    default_index = product_options.index("Full Portfolio")
     selected_product = st.selectbox(
         "Select a Product", 
         options=product_options, 
@@ -264,7 +264,7 @@ def render_portfolio_composition(df: pd.DataFrame, filtered_df: pd.DataFrame) ->
     """Render portfolio composition table and pie chart.
     
     Args:
-        df: Full portfolio dataframe
+        df: Full Portfolio dataframe
         filtered_df: Filtered portfolio data for selected product
     """
     st.subheader("Portfolio Composition")
@@ -273,8 +273,8 @@ def render_portfolio_composition(df: pd.DataFrame, filtered_df: pd.DataFrame) ->
     latest_date = filtered_df['End Date'].max()
     composition_df = df[df['End Date'] == latest_date].copy()
 
-    # Filter out "Full portfolio" from the composition
-    composition_df = composition_df[composition_df['Product'] != 'Full portfolio']
+    # Filter out "Full Portfolio" from the composition
+    composition_df = composition_df[composition_df['Product'] != 'Full Portfolio']
 
     if not composition_df.empty and len(composition_df) > 0:
         # Calculate NAV and NAV % for each product
@@ -306,4 +306,4 @@ def render_portfolio_composition(df: pd.DataFrame, filtered_df: pd.DataFrame) ->
         fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig_pie, use_container_width=True)
     else:
-        st.info("No composition data available. Select 'Full portfolio' to see individual holdings.")
+        st.info("No composition data available. Select 'Full Portfolio' to see individual holdings.")
