@@ -223,19 +223,15 @@ try:
         latest_data_date = df['End Date'].max().date()
         today = date.today()
         
-        if latest_data_date < today:
-            st.info(f"Portfolio data is outdated (last updated: {latest_data_date}). Updating to today's data...")
+        if latest_data_date < today and not st.session_state.get("data_update_in_progress", False):
+            st.session_state.data_update_in_progress = True
             with st.spinner("Refreshing portfolio data..."):
                 try:
                     trigger_portfolio_calculation()
-                    # Re-fetch the updated data
-                    st.session_state.portfolio_df = fetch_portfolio_daily()
-                    df = st.session_state.portfolio_df
-                    df = prepare_portfolio_dataframe(df)
-                    st.success("Portfolio data updated successfully!")
-                    st.rerun()
+                    st.toast("Portfolio data updated successfully!", icon="✅")
                 except Exception as e:
-                    st.error(f"Error updating portfolio data: {e}")
+                    st.toast(f"Error updating portfolio data: {e}", icon="❌")
+            st.session_state.data_update_in_progress = False
 except Exception as e:
     handle_api_error(e, "Failed to fetch portfolio data")
 
