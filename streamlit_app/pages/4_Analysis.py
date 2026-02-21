@@ -59,7 +59,7 @@ holdings_option = st.segmented_control(
     options=UIConstants.HOLDINGS_OPTIONS,
     default="Current Holdings",
     selection_mode="single",
-    help="All Holdings also include products that are no longer held in the portfolio"
+    help="All Holdings (also) include products that are no longer held in the portfolio"
 )
 
 # ============================================================================
@@ -107,13 +107,10 @@ st.markdown(
     help="**Portfolio Value:** Shows the current portfolio value and the last daily change"
 )
 
-# Calculate table height
-df_height_px = UIConstants.calculate_table_height(len(display_df))
-
 # Show dataframe
 st.dataframe(
     display_df_styled,
-    height=df_height_px,
+    use_container_width=True,
     hide_index=True,
     column_config={
         "Product": st.column_config.TextColumn(
